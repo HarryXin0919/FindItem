@@ -1,0 +1,28 @@
+server:
+  port: 8443
+  # To match the Python backend's HTTPS on Java 8 / Spring Boot 2.7, use a PKCS12
+  # keystore (PEM is not read directly here). Convert the certs from
+  # scripts/gen-certs.ps1 with:
+  #   openssl pkcs12 -export -in ../certs/server.crt -inkey ../certs/server.key \
+  #       -out ../certs/server.p12 -name finditem -passout pass:changeit
+  # then uncomment:
+  # ssl:
+  #   enabled: true
+  #   key-store: ../certs/server.p12
+  #   key-store-type: PKCS12
+  #   key-store-password: changeit
+  #   key-alias: finditem
+
+finditem:
+  catalog: ${FINDITEM_CATALOG:../config/items.json}
+  frontend: ${FINDITEM_FRONTEND:../frontend/index.html}
+
+mqtt:
+  host: ${MQTT_HOST:127.0.0.1}
+  port: ${MQTT_PORT:1883}
+  user: ${MQTT_USER:findit_backend}
+  pass: ${MQTT_PASS:findit123}
+
+spring:
+  main:
+    banner-mode: "off"

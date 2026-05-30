@@ -52,14 +52,15 @@ that publishes MQTT commands to devices — clients never touch the broker direc
 | Layer | Tech |
 |---|---|
 | Firmware | ESP32 · Arduino (C++) · PubSubClient · ArduinoJson |
-| Backend | Python · FastAPI · paho-mqtt **— or** Java · Spring Boot · Eclipse Paho (see [`backend-java/`](./backend-java)) |
+| Backend | Python · FastAPI · paho-mqtt **— or** Java · Spring Boot · Eclipse Paho |
 | Broker | Mosquitto (MQTT) |
 | Frontend | Vanilla HTML / CSS / JS |
 
-> Two interchangeable backends ship with the same REST + MQTT contract: the Python
-> one in [`backend/`](./backend) and a Java / Spring Boot one in
-> [`backend-java/`](./backend-java). Run either against the same firmware, broker,
-> and frontend.
+> Three interchangeable backends ship with the same REST + MQTT contract — run any
+> one against the same firmware, broker, and frontend:
+> - [`backend/`](./backend) — Python · FastAPI
+> - [`backend-java/`](./backend-java) — Java 17 · Spring Boot 3.2
+> - [`backend-java8/`](./backend-java8) — Java 8 · Spring Boot 2.7 (no toolchain upgrade needed)
 
 ### Quick start (Windows + PowerShell)
 
