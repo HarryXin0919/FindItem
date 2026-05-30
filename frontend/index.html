@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#61C4E3">
+  <title>FindIt · 寻物</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #61C4E3;
+      --accent-ink: #0A7099;     /* 浅底深字,和官网保持一致 */
+      --bg: #F5F6F8;
+      --card: #FFFFFF;
+      --line: #E6E8EC;
+      --text: #1A1D21;
+      --text-2: #6B7280;
+      --danger: #E5484D;
+      --ok: #2E7D32;
+      --warn: #B25E00;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    header {
+      padding: 18px 18px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; z-index: 10;
+    }
+    h1 {
+      margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+    }
+    h1 .it { color: var(--accent-ink); }
+    .me {
+      margin-top: 10px; display: flex; gap: 8px;
+    }
+    .me input {
+      flex: 1; min-width: 0;
+      padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+      font: inherit; background: #FAFBFC;
+    }
+    .me input:focus { outline: none; border-color: var(--accent); background: #fff; }
+
+    main { padding: 16px 14px 80px; max-width: 540px; margin: 0 auto; }
+
+    .item {
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+      padding: 14px 14px 12px; margin-bottom: 12px;
+    }
+    .item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .item-name { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+    .item-loc  { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+    .badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 999px;
+      background: #EEF1F4; color: var(--text-2); white-space: nowrap;
+    }
+    .badge.idle      { background: #EEF1F4; color: var(--text-2); }
+    .badge.starting  { background: #FFF4E0; color: var(--warn); }
+    .badge.ringing   { background: rgba(97,196,227,0.18); color: var(--accent-ink); }
+    .badge.unknown   { background: #F4E2E2; color: var(--danger); }
+
+    .toggle-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 12px;
+      font-size: 13px; color: var(--text-2);
+    }
+    .switch { position: relative; width: 38px; height: 22px; flex: none; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch span {
+      position: absolute; inset: 0; background: #D5D7DC; border-radius: 999px;
+      transition: background .2s ease;
+    }
+    .switch span::after {
+      content: ""; position: absolute; top: 2px; left: 2px;
+      width: 18px; height: 18px; background: #fff; border-radius: 999px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.18);
+      transition: transform .2s ease;
+    }
+    .switch input:checked + span { background: var(--accent); }
+    .switch input:checked + span::after { transform: translateX(16px); }
+
+    .actions { display: flex; gap: 10px; margin-top: 12px; }
+    button {
+      flex: 1; padding: 11px 14px; border-radius: 12px; border: none;
+      font: inherit; font-weight: 600; font-size: 15px; cursor: pointer;
+      transition: transform .08s ease, background .15s ease, color .15s ease;
+    }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-find { background: var(--accent); color: #fff; }
+    .btn-stop { background: #fff; color: var(--accent-ink); border: 1px solid var(--accent-ink); }
+
+    .events {
+      margin-top: 22px; background: var(--card); border: 1px solid var(--line);
+      border-radius: 14px; padding: 14px;
+    }
+    .events h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--text-2); letter-spacing: .02em; text-transform: uppercase; }
+    .ev { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+    .ev:first-of-type { border-top: none; }
+    .ev-dot { width: 8px; height: 8px; border-radius: 999px; margin-top: 7px; flex: none; background: var(--accent); }
+    .ev-body { flex: 1; min-width: 0; }
+    .ev-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ev-meta { color: var(--text-2); font-size: 11px; margin-top: 2px; }
+
+    .toast {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      background: #1A1D21; color: #fff; padding: 10px 16px; border-radius: 999px;
+      font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s ease;
+      max-width: 86vw;
+    }
+    .toast.show { opacity: 0.95; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Find<span class="it">It</span> · 寻物</h1>
+    <div class="me">
+      <input id="user-id"   placeholder="学号 / ID(例 student_a)" autocomplete="off">
+      <input id="user-name" placeholder="姓名(例 张三)"          autocomplete="off">
+    </div>
+  </header>
+
+  <main>
+    <div id="items"></div>
+
+    <section class="events">
+      <h2>最近事件</h2>
+      <div id="events"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+// ============ 用户身份(多用户) ============
+const elUserId   = document.getElementById("user-id");
+const elUserName = document.getElementById("user-name");
+elUserId.value   = localStorage.getItem("findit.user_id")   || "student_a";
+elUserName.value = localStorage.getItem("findit.user_name") || "Student A";
+elUserId.addEventListener("input",   () => localStorage.setItem("findit.user_id",   elUserId.value));
+elUserName.addEventListener("input", () => localStorage.setItem("findit.user_name", elUserName.value));
+
+// ============ 颜色调色板 ============
+function userColor(userId) {
+  if (!userId) return "#9AA0A6";
+  let h = 0;
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) & 0xffffffff;
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue}, 65%, 48%)`;
+}
+
+// ============ Toast ============
+const elToast = document.getElementById("toast");
+let toastT;
+function toast(msg) {
+  elToast.textContent = msg;
+  elToast.classList.add("show");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => elToast.classList.remove("show"), 2200);
+}
+
+// ============ 物品列表 ============
+const elItems = document.getElementById("items");
+let itemsCache = [];
+// item_id -> 用户选的蜂鸣器开关(默认 true);改一次记 localStorage 一次,demo 时方便重现
+const buzzerPref = {};
+
+async function loadItems() {
+  const r = await fetch("/api/items", { cache: "no-store" });
+  const data = await r.json();
+  itemsCache = data.items || [];
+  itemsCache.forEach(it => {
+    const saved = localStorage.getItem("findit.buzzer." + it.id);
+    buzzerPref[it.id] = saved === null ? true : saved === "1";
+  });
+  renderItems({});
+}
+
+function renderItems(devices) {
+  elItems.innerHTML = itemsCache.map(it => {
+    const dev = devices[it.device_id] || {};
+    const state = dev.state || "idle";
+    const ringing = state === "ringing" || state === "starting";
+    const buzzer = buzzerPref[it.id];
+    return `
+      <div class="item" data-item="${it.id}">
+        <div class="item-head">
+          <div>
+            <div class="item-name">${it.name}</div>
+            <div class="item-loc">${it.location} · ${it.device_id}</div>
+          </div>
+          <span class="badge ${state}">${labelOf(state)}</span>
+        </div>
+        <label class="toggle-row">
+          <span class="switch">
+            <input type="checkbox" data-buzzer="${it.id}" ${buzzer ? "checked" : ""}>
+            <span></span>
+          </span>
+          <span>${buzzer ? "响铃 + 亮灯" : "静音 · 只亮灯"}</span>
+        </label>
+        <div class="actions">
+          <button class="btn-find" data-find="${it.id}" ${ringing ? "disabled" : ""}>找它</button>
+          <button class="btn-stop" data-stop="${it.id}" ${ringing ? "" : "disabled"}>停止</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function labelOf(state) {
+  return ({
+    idle:     "待机",
+    starting: "启动中",
+    ringing:  "响铃中",
+    unknown:  "未连接",
+  }[state]) || state;
+}
+
+// 事件委托:Find / Stop / 蜂鸣器 toggle
+elItems.addEventListener("click", async (e) => {
+  const find = e.target.closest("[data-find]");
+  const stop = e.target.closest("[data-stop]");
+  if (find) return doAction(find.dataset.find, "start");
+  if (stop) return doAction(stop.dataset.stop, "stop");
+});
+elItems.addEventListener("change", (e) => {
+  const t = e.target.closest("[data-buzzer]");
+  if (!t) return;
+  const id = t.dataset.buzzer;
+  buzzerPref[id] = t.checked;
+  localStorage.setItem("findit.buzzer." + id, t.checked ? "1" : "0");
+  // 立刻刷新文案
+  refreshOnce();
+});
+
+async function doAction(itemId, action) {
+  const body = {
+    user_id:   elUserId.value.trim() || "anon",
+    user_name: elUserName.value.trim() || "Anon",
+    item_id:   itemId,
+    action,
+    buzzer:    buzzerPref[itemId] !== false,   // 蜂鸣器 toggle 顺势带上
+  };
+  try {
+    const r = await fetch("/api/search-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.status === 409) {
+      const j = await r.json().catch(() => ({}));
+      const who = j?.detail?.state?.current_user_name || "另一位同学";
+      toast(`设备忙:${who} 正在找它`);
+      return;
+    }
+    if (!r.ok) {
+      toast(`请求失败 (${r.status})`);
+      return;
+    }
+    if (action === "start") toast(body.buzzer ? "已开始 · 响铃 + 亮灯" : "已开始 · 静音模式");
+    else toast("已停止");
+  } catch (err) {
+    toast("网络错误");
+  } finally {
+    refreshOnce();
+  }
+}
+
+// ============ 状态轮询 + 事件流 ============
+const elEvents = document.getElementById("events");
+
+async function refreshOnce() {
+  try {
+    const [d, e] = await Promise.all([
+      fetch("/api/devices").then(r => r.json()),
+      fetch("/api/events?limit=12").then(r => r.json()),
+    ]);
+    renderItems(d.devices || {});
+    renderEvents(e.events || []);
+  } catch {}
+}
+
+function renderEvents(events) {
+  if (!events.length) {
+    elEvents.innerHTML = `<div class="ev-meta">(还没有记录,试试上面的"找它"按钮)</div>`;
+    return;
+  }
+  elEvents.innerHTML = events.map(ev => {
+    const c = userColor(ev.user_id);
+    const t = new Date(ev.ts * 1000).toLocaleTimeString();
+    if (ev.type === "started") {
+      return `<div class="ev">
+        <span class="ev-dot" style="background:${c}"></span>
+        <div class="ev-body">
+          <div class="ev-line"><b>${escapeHtml(ev.user_name || "?")}</b> 开始找 <b>${ev.item_id}</b>${ev.buzzer ? "" : " · 静音"}</div>
+          <div class="ev-meta">${t} · ${ev.device_id}</div>
+        </div>
+      </div>`;
+    }
+    return `<div class="ev">
+      <span class="ev-dot" style="background:${c}"></span>
+      <div class="ev-body">
+        <div class="ev-line">${escapeHtml(ev.user_name || "?") || "(系统)"} 停止 <b>${ev.item_id || ""}</b> · ${stopLabel(ev.stop_reason)}</div>
+        <div class="ev-meta">${t} · ${ev.device_id}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function stopLabel(r) {
+  return ({ button: "按钮停止", timeout: "到时自停", backend: "App 停止" })[r] || r || "停止";
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+// ============ 启动 ============
+(async () => {
+  await loadItems();
+  await refreshOnce();
+  setInterval(refreshOnce, 1500);   // 1.5s 轮询
+})();
+</script>
+</body>
+</html>

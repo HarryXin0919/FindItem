@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime artifacts
+runtime/
+
+# Secrets & certs (永远不要提交)
+certs/server.key
+certs/server.crt
+mosquitto/passwords
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Private reference docs — keep out of the repo
+FindIt_*.txt

@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "id": "FINDIT-001",
+      "name": "NEO 电机",
+      "name_en": "NEO Motor",
+      "device_id": "esp32-001",
+      "location": "赛季箱 A · 第 2 格",
+      "location_en": "Season Box A · slot 2",
+      "duration_sec": 15
+    },
+    {
+      "id": "FINDIT-002",
+      "name": "Falcon 编码器",
+      "name_en": "Falcon Encoder",
+      "device_id": "esp32-002",
+      "location": "赛季箱 B · 第 1 格",
+      "location_en": "Season Box B · slot 1",
+      "duration_sec": 15
+    },
+    {
+      "id": "FINDIT-003",
+      "name": "L 型轮毂",
+      "name_en": "L-bracket Hub",
+      "device_id": "esp32-003",
+      "location": "赛季箱 C · 第 4 格",
+      "location_en": "Season Box C · slot 4",
+      "duration_sec": 15
+    }
+  ]
+}
