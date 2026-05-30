@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/banner.svg" alt="FindItem" width="420">
+
 # FindItem · 寻物
 
 **Light up the bin that holds your part.**
