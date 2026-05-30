@@ -47,7 +47,7 @@ that publishes MQTT commands to devices — clients never touch the broker direc
 - 👥 **Multi-user** — concurrent searches, each user gets a distinct color
 - 🔁 **Live status & event feed** — poll device state and a recent-activity timeline
 - 🧩 **Hot-reloadable catalog** — edit `config/items.json`, no backend restart
-- 🔒 **Auth'd MQTT + HTTPS** — broker requires credentials; self-signed certs for LAN
+- 🔒 **Password-auth MQTT + HTTPS frontend** — broker requires credentials (unencrypted on the LAN; enable an 8883 TLS listener for production); the Python backend serves the frontend over HTTPS with self-signed certs
 
 ### Tech stack
 

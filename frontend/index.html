@@ -190,11 +190,11 @@ function renderItems(devices) {
     const ringing = state === "ringing" || state === "starting";
     const buzzer = buzzerPref[it.id];
     return `
-      <div class="item" data-item="${it.id}">
+      <div class="item" data-item="${escapeHtml(it.id)}">
         <div class="item-head">
           <div>
-            <div class="item-name">${it.name}</div>
-            <div class="item-loc">${it.location} · ${it.device_id}</div>
+            <div class="item-name">${escapeHtml(it.name)}</div>
+            <div class="item-loc">${escapeHtml(it.location)} · ${escapeHtml(it.device_id)}</div>
           </div>
           <span class="badge ${state}">${labelOf(state)}</span>
         </div>
@@ -256,7 +256,9 @@ async function doAction(itemId, action) {
     });
     if (r.status === 409) {
       const j = await r.json().catch(() => ({}));
-      const who = j?.detail?.state?.current_user_name || "另一位同学";
+      // 兼容 Python(嵌套 detail)与 Java(扁平)两种响应体
+      const st = j?.detail?.state || j?.state || {};
+      const who = st.current_user_name || "另一位同学";
       toast(`设备忙:${who} 正在找它`);
       return;
     }
@@ -278,13 +280,39 @@ const elEvents = document.getElementById("events");
 
 async function refreshOnce() {
   try {
-    const [d, e] = await Promise.all([
-      fetch("/api/devices").then(r => r.json()),
-      fetch("/api/events?limit=12").then(r => r.json()),
+    const [dr, er] = await Promise.all([
+      fetch("/api/devices"),
+      fetch("/api/events?limit=12"),
     ]);
+    if (!dr.ok || !er.ok) throw new Error("bad status " + dr.status + "/" + er.status);
+    const d = await dr.json();
+    const e = await er.json();
     renderItems(d.devices || {});
     renderEvents(e.events || []);
-  } catch {}
+    setOffline(false);
+  } catch (err) {
+    console.warn("刷新失败:", err);
+    setOffline(true);   // 显示离线提示,而不是默默冻结成旧状态
+  }
+}
+
+let _offline = false;
+function setOffline(off) {
+  if (off === _offline) return;
+  _offline = off;
+  let bar = document.getElementById("offline-bar");
+  if (off) {
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "offline-bar";
+      bar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:999;padding:8px 12px;" +
+        "text-align:center;font-size:13px;background:#E5484D;color:#fff;";
+      bar.textContent = "⚠ 与后端连接中断,正在重试…(显示的可能是旧状态)";
+      document.body.appendChild(bar);
+    }
+  } else if (bar) {
+    bar.remove();
+  }
 }
 
 function renderEvents(events) {
@@ -299,7 +327,7 @@ function renderEvents(events) {
       return `<div class="ev">
         <span class="ev-dot" style="background:${c}"></span>
         <div class="ev-body">
-          <div class="ev-line"><b>${escapeHtml(ev.user_name || "?")}</b> 开始找 <b>${ev.item_id}</b>${ev.buzzer ? "" : " · 静音"}</div>
+          <div class="ev-line"><b>${escapeHtml(ev.user_name || "?")}</b> 开始找 <b>${escapeHtml(ev.item_id)}</b>${ev.buzzer ? "" : " · 静音"}</div>
           <div class="ev-meta">${t} · ${ev.device_id}</div>
         </div>
       </div>`;
@@ -307,7 +335,7 @@ function renderEvents(events) {
     return `<div class="ev">
       <span class="ev-dot" style="background:${c}"></span>
       <div class="ev-body">
-        <div class="ev-line">${escapeHtml(ev.user_name || "?") || "(系统)"} 停止 <b>${ev.item_id || ""}</b> · ${stopLabel(ev.stop_reason)}</div>
+        <div class="ev-line">${escapeHtml(ev.user_name || "?") || "(系统)"} 停止 <b>${escapeHtml(ev.item_id || "")}</b> · ${stopLabel(ev.stop_reason)}</div>
         <div class="ev-meta">${t} · ${ev.device_id}</div>
       </div>
     </div>`;

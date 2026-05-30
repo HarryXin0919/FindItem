@@ -13,17 +13,21 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .mqtt_bridge import FindItBridge
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("finditem")
 
 # 项目根 = .../findit_mvp(从 backend/app/main.py 往上 3 层)
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -40,7 +44,11 @@ bridge = FindItBridge(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    bridge.start()
+    # bridge.start() 已是非阻塞 + 自重连,broker 没起也不会让后端崩
+    try:
+        bridge.start()
+    except Exception as e:
+        log.warning("MQTT 启动异常(后台会重试,API 仍可用): %s", e)
     try:
         yield
     finally:
@@ -51,9 +59,18 @@ app = FastAPI(title="FindIt MVP", lifespan=lifespan)
 
 
 def _load_items() -> dict:
-    """每次都重读 -> 改 items.json 不重启 FastAPI。"""
-    with CONFIG_PATH.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    """每次都重读 -> 改 items.json 不重启 FastAPI。
+    文件缺失/正在保存/语法错误时,不要用 500 把整个物品列表打挂 —— 抛 503,前端可重试。"""
+    try:
+        with CONFIG_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail={"error": "catalog_unavailable", "reason": "items.json 不存在"})
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=503, detail={"error": "catalog_invalid", "reason": f"items.json 解析失败: {e}"})
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        raise HTTPException(status_code=503, detail={"error": "catalog_invalid", "reason": "缺少 items 列表"})
+    return data
 
 
 # ============ Pydantic 模型 ============
@@ -79,14 +96,25 @@ def get_items():
 @app.post("/api/search-events")
 def post_event(body: SearchEvent):
     items = _load_items()["items"]
-    item = next((x for x in items if x["id"] == body.item_id), None)
+    item = next((x for x in items if x.get("id") == body.item_id), None)
     if item is None:
         raise HTTPException(status_code=404, detail={"error": "unknown_item", "item_id": body.item_id})
-    device_id = item["device_id"]
+    device_id = item.get("device_id")
+    if not device_id:
+        raise HTTPException(status_code=500, detail={"error": "item_missing_device_id", "item_id": body.item_id})
 
     if body.action == "start":
-        # device_busy 策略
-        if bridge.is_busy(device_id):
+        duration = body.duration or item.get("duration_sec", 15)
+        # 原子 check-and-set:忙则返回 None -> 409(避免 TOCTOU 竞态)
+        event_id = bridge.try_start(
+            device_id=device_id,
+            item_id=body.item_id,
+            user_id=body.user_id,
+            user_name=body.user_name,
+            duration=duration,
+            buzzer=body.buzzer,
+        )
+        if event_id is None:
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -95,15 +123,6 @@ def post_event(body: SearchEvent):
                     "state": bridge.device_state(device_id),
                 },
             )
-        duration = body.duration or item.get("duration_sec", 15)
-        event_id = bridge.send_start(
-            device_id=device_id,
-            item_id=body.item_id,
-            user_id=body.user_id,
-            user_name=body.user_name,
-            duration=duration,
-            buzzer=body.buzzer,
-        )
         return {
             "ok": True,
             "event_id": event_id,
@@ -129,7 +148,7 @@ def device_state(device_id: str):
 
 
 @app.get("/api/events")
-def get_events(limit: int = 50):
+def get_events(limit: int = Query(50, ge=1, le=200)):
     """多用户事件时间线 —— 按 user_id 上色。"""
     return {"events": bridge.recent_events(limit=limit)}
 
@@ -142,4 +161,8 @@ def index():
 
 
 # /static/* 提供前端资源(目前其实就一个 index.html,留口子未来加 js/css)
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+# 仅在目录存在时挂载,否则纯后端部署会在 import 期就崩(StaticFiles 默认 check_dir=True)
+if FRONTEND_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+else:
+    log.warning("前端目录不存在,跳过 /static 挂载: %s", FRONTEND_DIR)

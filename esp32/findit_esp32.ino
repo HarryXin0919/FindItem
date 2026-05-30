@@ -50,8 +50,10 @@ void publishStatus(const char* stopReason = nullptr) {
   StaticJsonDocument<256> doc;
   doc["state"]            = currentState;
   doc["device_id"]        = DEVICE_ID;
-  doc["current_item"]     = currentItemId;
-  doc["current_event_id"] = currentEventId;
+  // 只在有有效值时才带 current_item / current_event_id;
+  // 否则(如重连时 idle)发空串会把后端缓存里的有效上下文冲掉。
+  if (currentItemId.length())  doc["current_item"]     = currentItemId;
+  if (currentEventId.length()) doc["current_event_id"] = currentEventId;
   doc["buzzer_on"]        = buzzerOn;
   if (stopReason) doc["stop_reason"] = stopReason;
   char buf[256];
@@ -103,22 +105,36 @@ void onMessage(char* topic, byte* payload, unsigned int length) {
     const char* eid  = doc["event_id"] | "";
     int  dur = doc["duration"] | 15;
     bool buz = doc["buzzer"]   | true;       // 默认响 —— 兼容旧载荷
+    if (dur < 1 || dur > 120) dur = 15;      // 设备侧夹紧:别信任直接发来的越界时长(否则可能响到地老天荒)
     startRing(String(item), String(eid), dur, buz);
   } else if (strcmp(cmd, "stop") == 0) {
     if (currentState != "idle") stopRing("backend");
   }
 }
 
-// =============== 6. MQTT 连接保活 ===============
-void ensureMqtt() {
-  while (!mqtt.connected()) {
-    String clientId = String("findit-") + DEVICE_ID;
-    if (mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
-      mqtt.subscribe(cmdTopic().c_str(), 1);
-      publishStatus();  // 上电一次,后端马上看到我
-    } else {
-      delay(1500);
-    }
+// =============== 6. 非阻塞连接维护 ===============
+// 关键:绝不在 loop() 里死等连接。WiFi/MQTT 断了也要让按钮、到时自停照常运行,
+// 否则响铃途中一旦断网,蜂鸣器就停不下来。
+unsigned long lastWifiTry = 0;
+unsigned long lastMqttTry = 0;
+
+void serviceWifi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  if (millis() - lastWifiTry < 3000) return;   // 每 3s 试一次,不阻塞
+  lastWifiTry = millis();
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+void serviceMqtt() {
+  if (WiFi.status() != WL_CONNECTED) return;    // 没 IP 先别连 MQTT
+  if (mqtt.connected()) return;
+  if (millis() - lastMqttTry < 1500) return;    // 每 1.5s 单次尝试,不死循环
+  lastMqttTry = millis();
+  String clientId = String("findit-") + DEVICE_ID;
+  if (mqtt.connect(clientId.c_str(), MQTT_USER, MQTT_PASS)) {
+    mqtt.subscribe(cmdTopic().c_str(), 1);
+    publishStatus();  // 一连上就让后端看到我
   }
 }
 
@@ -132,7 +148,10 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) delay(300);
+  // 启动时给 WiFi 一个有上限的等待(~10s);连不上也继续进 loop,由 serviceWifi 后台重连,
+  // 不再因为 AP 没开/密码错就永久卡死在 setup。
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) delay(300);
 
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMessage);
@@ -140,7 +159,10 @@ void setup() {
 }
 
 void loop() {
-  ensureMqtt();
+  // 连接维护是非阻塞的,后面这些状态机逻辑每一圈都必然执行 ——
+  // 这正是「断网也能按按钮停 / 到时自停」的保证。
+  serviceWifi();
+  serviceMqtt();
   mqtt.loop();
 
   // 物理按钮 —— 下降沿触发,"按按钮停"
