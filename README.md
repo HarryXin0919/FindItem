@@ -7,9 +7,10 @@
 **Light up the bin that holds your part.**
 A decentralized parts locator — search a part, the right storage box rings and glows.
 
+[![CI](https://github.com/HarryXin0919/FindItem/actions/workflows/ci.yml/badge.svg)](https://github.com/HarryXin0919/FindItem/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 ![Platform](https://img.shields.io/badge/MCU-ESP32-informational)
-![Backend](https://img.shields.io/badge/backend-FastAPI-009688)
+![Backend](https://img.shields.io/badge/backend-FastAPI%20%7C%20Spring%20Boot-009688)
 ![Transport](https://img.shields.io/badge/transport-MQTT-660066)
 
 [English](#english) · [中文](#中文)
