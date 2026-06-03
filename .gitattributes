@@ -1,0 +1,6 @@
+# backend-java8/ is the Java 8 / Spring Boot 2.7 compatibility port of
+# backend-java/ — the same REST + MQTT backend, just for an older toolchain.
+# Exclude it from GitHub's language statistics so the identical backend isn't
+# counted twice and the language bar reflects the project's real mix (ESP32
+# firmware + Python / Java backends + web frontend), not a doubled Java total.
+backend-java8/** linguist-vendored
