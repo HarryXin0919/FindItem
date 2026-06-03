@@ -58,7 +58,10 @@ void publishStatus(const char* stopReason = nullptr) {
   if (stopReason) doc["stop_reason"] = stopReason;
   char buf[256];
   size_t n = serializeJson(doc, buf, sizeof(buf));
-  mqtt.publish(statusTopic().c_str(), buf, n, /*retain=*/false);
+  // PubSubClient's length-aware publish() takes const uint8_t*; cast the char
+  // buffer explicitly — the ESP32 core compiles without -fpermissive, so the
+  // implicit char*→uint8_t* conversion that AVR tolerates is a hard error here.
+  mqtt.publish(statusTopic().c_str(), (const uint8_t*)buf, n, /*retain=*/false);
 }
 
 // =============== 4. 行为 ===============
