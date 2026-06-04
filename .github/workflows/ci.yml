@@ -32,9 +32,9 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
-      - name: Build (skip tests — this is a smoke build)
+      - name: Build + test
         working-directory: backend-java
-        run: mvn -B -ntp -DskipTests package
+        run: mvn -B -ntp verify
 
   java8:
     name: Java backend · Spring Boot 2.7 / JDK 8
@@ -46,9 +46,9 @@ jobs:
           distribution: temurin
           java-version: "8"
           cache: maven
-      - name: Build
+      - name: Build + test
         working-directory: backend-java8
-        run: mvn -B -ntp -DskipTests package
+        run: mvn -B -ntp verify
 
   firmware:
     name: ESP32-C3 firmware (arduino-cli compile)

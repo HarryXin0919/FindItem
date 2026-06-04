@@ -173,14 +173,27 @@ let itemsCache = [];
 const buzzerPref = {};
 
 async function loadItems() {
-  const r = await fetch("/api/items", { cache: "no-store" });
-  const data = await r.json();
-  itemsCache = data.items || [];
-  itemsCache.forEach(it => {
-    const saved = localStorage.getItem("findit.buzzer." + it.id);
-    buzzerPref[it.id] = saved === null ? true : saved === "1";
-  });
-  renderItems({});
+  // Don't let a missing/broken catalog (503) or a network error blow up startup —
+  // show an offline banner and an empty list instead of a blank, half-initialised page.
+  try {
+    const r = await fetch("/api/items", { cache: "no-store" });
+    if (!r.ok) {
+      toast(`物品列表加载失败 (${r.status})`);
+      itemsCache = []; renderItems({}); setOffline(true);
+      return;
+    }
+    const data = await r.json();
+    itemsCache = data.items || [];
+    itemsCache.forEach(it => {
+      const saved = localStorage.getItem("findit.buzzer." + it.id);
+      buzzerPref[it.id] = saved === null ? true : saved === "1";
+    });
+    renderItems({});
+  } catch (err) {
+    console.warn("loadItems 失败:", err);
+    toast("无法加载物品列表(网络错误)");
+    itemsCache = []; renderItems({}); setOffline(true);
+  }
 }
 
 function renderItems(devices) {
@@ -290,9 +303,11 @@ async function refreshOnce() {
     renderItems(d.devices || {});
     renderEvents(e.events || []);
     setOffline(false);
+    return true;
   } catch (err) {
     console.warn("刷新失败:", err);
     setOffline(true);   // 显示离线提示,而不是默默冻结成旧状态
+    return false;
   }
 }
 
@@ -353,7 +368,16 @@ function escapeHtml(s) {
 (async () => {
   await loadItems();
   await refreshOnce();
-  setInterval(refreshOnce, 1500);   // 1.5s 轮询
+  // 轮询带退避:正常每 1.5s;后端故障时逐步退避到最多 30s,恢复后立刻回到 1.5s ——
+  // 避免后端/ broker 宕机时被前端每 1.5s 刷爆(多用户场景尤甚)。
+  let pollDelay = 1500;
+  (function loop() {
+    setTimeout(async () => {
+      const ok = await refreshOnce();
+      pollDelay = ok ? 1500 : Math.min(pollDelay * 2, 30000);
+      loop();
+    }, pollDelay);
+  })();
 })();
 </script>
 </body>

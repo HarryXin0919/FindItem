@@ -1,9 +1,11 @@
 package dev.finditem.web;
 
+import dev.finditem.catalog.CatalogException;
 import dev.finditem.catalog.ItemCatalog;
 import dev.finditem.model.SearchEvent;
 import dev.finditem.mqtt.FindItBridge;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,12 +62,6 @@ public class ApiController {
         boolean buzzer = body.buzzer == null || body.buzzer.booleanValue();
 
         if ("start".equals(body.action)) {
-            if (bridge.isBusy(deviceId)) {
-                Map<String, Object> e = err("device_busy");
-                e.put("device_id", deviceId);
-                e.put("state", bridge.deviceState(deviceId));
-                return ResponseEntity.status(409).body(e);
-            }
             int duration;
             if (body.duration != null) {
                 duration = body.duration.intValue();
@@ -75,8 +71,15 @@ public class ApiController {
             } else {
                 duration = asInt(item.get("duration_sec"), 15);
             }
-            String eventId = bridge.sendStart(deviceId, body.item_id,
+            // Atomic check-and-set: a null result means the device is already ringing (409).
+            String eventId = bridge.tryStart(deviceId, body.item_id,
                     body.user_id, body.user_name, duration, buzzer);
+            if (eventId == null) {
+                Map<String, Object> e = err("device_busy");
+                e.put("device_id", deviceId);
+                e.put("state", bridge.deviceState(deviceId));
+                return ResponseEntity.status(409).body(e);
+            }
             Map<String, Object> ok = new HashMap<String, Object>();
             ok.put("ok", true);
             ok.put("event_id", eventId);
@@ -111,6 +114,14 @@ public class ApiController {
         Map<String, Object> out = new HashMap<String, Object>();
         out.put("events", bridge.recentEvents(limit));
         return out;
+    }
+
+    /** Catalog read/parse failure -> 503 (retryable), mirroring the Python backend. */
+    @ExceptionHandler(CatalogException.class)
+    public ResponseEntity<Object> handleCatalog(CatalogException ex) {
+        Map<String, Object> m = err(ex.code);
+        m.put("reason", ex.getMessage());
+        return ResponseEntity.status(ex.status).body(m);
     }
 
     // ---------- helpers ----------
