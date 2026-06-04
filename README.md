@@ -34,12 +34,22 @@ a daily question.
 
 ### How it works
 
-```
-phone / web  ──HTTPS──▶  FastAPI  ──MQTT──▶  Mosquitto  ──MQTT──▶  ESP32 (LED + buzzer)
+```mermaid
+flowchart LR
+    UI["📱 Phone / Web UI"] -->|"HTTPS · POST /api/search-events"| BE
+    BE["⚙️ Backend<br/>FastAPI · or Spring Boot<br/>(the only MQTT publisher)"]
+    CAT[("📒 items.json<br/>hot-reloadable catalog")] -. "read per request" .-> BE
+    BE -->|"publish findit/device/{id}/command"| BR["🦟 Mosquitto<br/>MQTT broker (auth)"]
+    BR -->|"command"| ESP["🔌 ESP32-C3<br/>LED + buzzer + stop button"]
+    ESP -->|"publish .../status"| BR
+    BR -->|"status: state · stop_reason"| BE
+    BE -. "/api/events live feed" .-> UI
 ```
 
 The frontend only ever talks HTTPS to the backend. The backend is the single place
-that publishes MQTT commands to devices — clients never touch the broker directly.
+that publishes MQTT commands to devices — clients never touch the broker directly;
+devices report back on a `status` topic, which the backend turns into live state and
+a multi-user event feed.
 
 ### Features
 

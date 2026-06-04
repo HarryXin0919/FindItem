@@ -7,21 +7,23 @@ on:
     branches: [main]
 
 jobs:
-  python-backend:
-    name: Python backend (FastAPI)
+  python:
+    name: Python backend (pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Install deps
-        run: pip install -r requirements.txt
-      - name: Compile-check
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Compile check
         run: python -m compileall backend
+      - name: Run tests
+        run: pytest
 
-  java17-backend:
-    name: Java 17 backend (Spring Boot 3.2)
+  java17:
+    name: Java backend · Spring Boot 3 / JDK 17
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,12 +32,12 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
-      - name: Compile
-        run: mvn -B -q compile
+      - name: Build (skip tests — this is a smoke build)
         working-directory: backend-java
+        run: mvn -B -ntp -DskipTests package
 
-  java8-backend:
-    name: Java 8 backend (Spring Boot 2.7)
+  java8:
+    name: Java backend · Spring Boot 2.7 / JDK 8
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +46,28 @@ jobs:
           distribution: temurin
           java-version: "8"
           cache: maven
-      - name: Compile
-        run: mvn -B -q compile
+      - name: Build
         working-directory: backend-java8
+        run: mvn -B -ntp -DskipTests package
+
+  firmware:
+    name: ESP32-C3 firmware (arduino-cli compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 core + libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install PubSubClient ArduinoJson
+      - name: Compile sketch
+        run: |
+          # arduino-cli needs the .ino inside a folder of the SAME name, so copy
+          # findit_esp32.ino (it lives in esp32/) into a matching sketch folder.
+          mkdir -p build_sketch/findit_esp32
+          cp esp32/findit_esp32.ino build_sketch/findit_esp32/
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 build_sketch/findit_esp32
