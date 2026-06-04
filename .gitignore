@@ -7,9 +7,8 @@ __pycache__/
 # Runtime artifacts
 runtime/
 
-# Secrets & certs (永远不要提交)
-certs/server.key
-certs/server.crt
+# Secrets & certs (永远不要提交) —— 忽略整个 certs/ 目录,避免漏掉新增的密钥/CA 文件
+certs/
 mosquitto/passwords
 
 # Editor / OS

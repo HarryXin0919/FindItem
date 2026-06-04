@@ -30,8 +30,12 @@ public class ItemCatalog {
     public Map<String, Object> load() {
         try {
             return om.readValue(Files.readAllBytes(path), Map.class);
+        } catch (java.nio.file.NoSuchFileException e) {
+            throw new CatalogException(503, "catalog_unavailable", "items.json not found at " + path);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new CatalogException(503, "catalog_invalid", "items.json parse error: " + e.getOriginalMessage());
         } catch (IOException e) {
-            throw new UncheckedIOException("cannot read catalog at " + path, e);
+            throw new CatalogException(503, "catalog_unavailable", "cannot read catalog: " + e.getMessage());
         }
     }
 
