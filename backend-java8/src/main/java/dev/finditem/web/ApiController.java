@@ -58,7 +58,13 @@ public class ApiController {
             e.put("item_id", body.item_id);
             return ResponseEntity.status(404).body(e);
         }
-        String deviceId = String.valueOf(item.get("device_id"));
+        Object deviceObj = item.get("device_id");
+        String deviceId = deviceObj == null ? null : String.valueOf(deviceObj);
+        if (isBlank(deviceId) || "null".equals(deviceId)) {   // parity with Python: 500 on missing device_id
+            Map<String, Object> e = err("item_missing_device_id");
+            e.put("item_id", body.item_id);
+            return ResponseEntity.status(500).body(e);
+        }
         boolean buzzer = body.buzzer == null || body.buzzer.booleanValue();
 
         if ("start".equals(body.action)) {
