@@ -51,6 +51,11 @@ public class ApiController {
         if (!"start".equals(body.action) && !"stop".equals(body.action)) {
             return ResponseEntity.badRequest().body(err("invalid_action"));
         }
+        // Validate duration range for EVERY request (parity with Python's Field(ge=1, le=120),
+        // which rejects an out-of-range duration regardless of action).
+        if (body.duration != null && (body.duration.intValue() < 1 || body.duration.intValue() > 120)) {
+            return ResponseEntity.badRequest().body(err("invalid_duration"));
+        }
 
         Map<String, Object> item = catalog.findItem(body.item_id);
         if (item == null) {
@@ -70,10 +75,7 @@ public class ApiController {
         if ("start".equals(body.action)) {
             int duration;
             if (body.duration != null) {
-                duration = body.duration.intValue();
-                if (duration < 1 || duration > 120) {
-                    return ResponseEntity.badRequest().body(err("invalid_duration"));
-                }
+                duration = body.duration.intValue();   // already range-checked above
             } else {
                 duration = asInt(item.get("duration_sec"), 15);
             }

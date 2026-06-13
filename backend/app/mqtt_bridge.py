@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 import uuid
@@ -19,6 +20,10 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 log = logging.getLogger("finditem.mqtt")
+
+# 设备 id 白名单 —— device_id 来自不可信的 MQTT status 主题,会被原样回显到前端事件流,
+# 只放行字母数字与 . _ -,不匹配的整条消息直接丢弃(纵深防御,杜绝 XSS 注入)。
+DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 # topic 模板 —— 和 mosquitto_pub 测试命令完全一致
 DEVICE_TOPIC_CMD = "findit/device/{device_id}/command"
@@ -78,6 +83,9 @@ class FindItBridge:
         if len(parts) != 4 or parts[0] != "findit" or parts[3] != "status":
             return
         device_id = parts[2]
+        # device_id 不合法 -> 丢弃,避免污染状态/事件流(纵深防御)
+        if not DEVICE_ID_RE.match(device_id):
+            return
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
         except Exception:

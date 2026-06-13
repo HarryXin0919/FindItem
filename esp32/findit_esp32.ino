@@ -123,9 +123,10 @@ unsigned long lastMqttTry = 0;
 
 void serviceWifi() {
   if (WiFi.status() == WL_CONNECTED) return;
-  if (millis() - lastWifiTry < 3000) return;   // 每 3s 试一次,不阻塞
+  // 别在重连途中 WiFi.disconnect():那会撕掉正在进行的关联,反而让重连卡死。
+  // 交给底层 setAutoReconnect(true) 自动重连,这里只在更长的退避(>=10s)后补发一次 begin()。
+  if (millis() - lastWifiTry < 10000) return;  // 每 10s 最多补发一次,不阻塞
   lastWifiTry = millis();
-  WiFi.disconnect();
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 }
 
@@ -150,6 +151,7 @@ void setup() {
   digitalWrite(PIN_BUZZER, LOW);
 
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);   // 让底层在断连后自动重连,避免每 3s disconnect+begin 把关联撕掉
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   // 启动时给 WiFi 一个有上限的等待(~10s);连不上也继续进 loop,由 serviceWifi 后台重连,
   // 不再因为 AP 没开/密码错就永久卡死在 setup。

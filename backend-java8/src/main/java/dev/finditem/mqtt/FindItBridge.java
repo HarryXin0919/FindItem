@@ -40,6 +40,9 @@ public class FindItBridge {
     private static final String CMD_TOPIC = "findit/device/%s/command";
     private static final String STATUS_SUB = "findit/device/+/status";
     private static final int MAX_EVENTS = 200;
+    /** device_id from the untrusted status topic is echoed to the frontend; only allow a safe charset. */
+    private static final java.util.regex.Pattern DEVICE_ID_RE =
+            java.util.regex.Pattern.compile("^[A-Za-z0-9._-]+$");
     /** a starting/ringing state older than (duration + this) is treated as stale -> not busy. */
     private static final long STALE_GRACE_SEC = 10;
 
@@ -151,6 +154,10 @@ public class FindItBridge {
             return;
         }
         String deviceId = parts[2];
+        // invalid device_id -> drop the message (defense in depth: keeps XSS payloads out of state/events)
+        if (!DEVICE_ID_RE.matcher(deviceId).matches()) {
+            return;
+        }
 
         Map<String, Object> payload;
         try {

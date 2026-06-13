@@ -28,8 +28,9 @@ public class ItemCatalog {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> load() {
+        Map<String, Object> data;
         try {
-            return om.readValue(Files.readAllBytes(path), Map.class);
+            data = om.readValue(Files.readAllBytes(path), Map.class);
         } catch (java.nio.file.NoSuchFileException e) {
             throw new CatalogException(503, "catalog_unavailable", "items.json not found at " + path);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -37,6 +38,12 @@ public class ItemCatalog {
         } catch (IOException e) {
             throw new CatalogException(503, "catalog_unavailable", "cannot read catalog: " + e.getMessage());
         }
+        // Parseable but malformed shape (e.g. items missing / not an array) -> 503 catalog_invalid,
+        // matching the Python backend's isinstance check.
+        if (data == null || !(data.get("items") instanceof List)) {
+            throw new CatalogException(503, "catalog_invalid", "items.json missing items list");
+        }
+        return data;
     }
 
     /** Returns the item map for {@code itemId}, or null if not found. */

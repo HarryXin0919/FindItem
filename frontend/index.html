@@ -343,15 +343,15 @@ function renderEvents(events) {
         <span class="ev-dot" style="background:${c}"></span>
         <div class="ev-body">
           <div class="ev-line"><b>${escapeHtml(ev.user_name || "?")}</b> 开始找 <b>${escapeHtml(ev.item_id)}</b>${ev.buzzer ? "" : " · 静音"}</div>
-          <div class="ev-meta">${t} · ${ev.device_id}</div>
+          <div class="ev-meta">${t} · ${escapeHtml(ev.device_id || "")}</div>
         </div>
       </div>`;
     }
     return `<div class="ev">
       <span class="ev-dot" style="background:${c}"></span>
       <div class="ev-body">
-        <div class="ev-line">${escapeHtml(ev.user_name || "?") || "(系统)"} 停止 <b>${escapeHtml(ev.item_id || "")}</b> · ${stopLabel(ev.stop_reason)}</div>
-        <div class="ev-meta">${t} · ${ev.device_id}</div>
+        <div class="ev-line">${escapeHtml(ev.user_name || "?") || "(系统)"} 停止 <b>${escapeHtml(ev.item_id || "")}</b> · ${escapeHtml(stopLabel(ev.stop_reason))}</div>
+        <div class="ev-meta">${t} · ${escapeHtml(ev.device_id || "")}</div>
       </div>
     </div>`;
   }).join("");
