@@ -3,23 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#61C4E3">
+  <meta name="theme-color" content="#0A7099">
   <title>FindIt · 寻物</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --accent: #61C4E3;
-      --accent-ink: #0A7099;     /* 浅底深字,和官网保持一致 */
+      --accent: #0A7099;
+      --accent-ink: #0A7099;
+      --accent-light: #61C4E3;
+      --accent-soft: rgba(10, 112, 153, 0.12);
       --bg: #F5F6F8;
       --card: #FFFFFF;
       --line: #E6E8EC;
       --text: #1A1D21;
       --text-2: #6B7280;
-      --danger: #E5484D;
+      --danger: #C53030;
       --ok: #2E7D32;
       --warn: #B25E00;
+      --focus-ring: #0A7099;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
@@ -28,6 +31,10 @@
       font-weight: 400;
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
     header {
       padding: 18px 18px 14px;
@@ -38,41 +45,111 @@
     h1 {
       margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
     }
-    h1 .it { color: var(--accent-ink); }
+    h1 .it { color: var(--accent); }
     .me {
       margin-top: 10px; display: flex; gap: 8px;
     }
+    .me label { display: block; }
     .me input {
       flex: 1; min-width: 0;
       padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
       font: inherit; background: #FAFBFC;
     }
-    .me input:focus { outline: none; border-color: var(--accent); background: #fff; }
+    .me input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--accent); background: #fff; }
 
-    main { padding: 16px 14px 80px; max-width: 540px; margin: 0 auto; }
+    .search-row {
+      margin-top: 12px; display: flex; gap: 8px; align-items: center;
+    }
+    .search-wrap {
+      position: relative; flex: 1; min-width: 0;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 10px 12px 10px 36px;
+      border: 1px solid var(--line); border-radius: 10px;
+      font: inherit; background: #FAFBFC;
+    }
+    .search-wrap input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--accent); background: #fff; }
+    .search-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      width: 16px; height: 16px; color: var(--text-2); pointer-events: none;
+    }
+    .btn-clear {
+      flex: none; padding: 10px 14px; border-radius: 10px;
+      border: 1px solid var(--line); background: #fff; color: var(--text-2);
+      font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+      min-height: 44px;
+    }
+    .btn-clear:hover { color: var(--text); border-color: var(--text-2); }
+    .btn-clear:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+    .result-count {
+      margin-top: 8px; font-size: 13px; color: var(--text-2);
+      min-height: 18px;
+    }
+
+    main { padding: 16px 14px 80px; max-width: 1100px; margin: 0 auto; }
+
+    @media (min-width: 900px) {
+      main {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 20px;
+        align-items: start;
+      }
+      .items-col { min-width: 0; }
+      .events-col { position: sticky; top: 140px; }
+    }
+
+    .empty-state {
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+      padding: 32px 20px; text-align: center; color: var(--text-2);
+    }
+    .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+
+    .loading-state {
+      background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+      padding: 24px 20px; text-align: center; color: var(--text-2);
+    }
+
+    .error-state {
+      background: #FEF2F2; border: 1px solid #FECACA; border-radius: 14px;
+      padding: 16px 18px; color: var(--danger); font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .error-state .error-title { font-weight: 600; margin-bottom: 6px; }
+    .error-state .error-msg { font-size: 13px; color: #7F1D1D; margin-bottom: 10px; }
+    .error-state .btn-retry {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid var(--danger);
+      background: #fff; color: var(--danger); font: inherit; font-size: 13px;
+      font-weight: 500; cursor: pointer; min-height: 36px;
+    }
+    .error-state .btn-retry:hover { background: #FEE2E2; }
+    .error-state .btn-retry:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
 
     .item {
       background: var(--card); border: 1px solid var(--line); border-radius: 14px;
       padding: 14px 14px 12px; margin-bottom: 12px;
     }
     .item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-    .item-name { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
-    .item-loc  { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+    .item-name { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; word-break: break-word; }
+    .item-loc  { font-size: 13px; color: var(--text-2); margin-top: 2px; word-break: break-word; }
     .badge {
       font-size: 11px; padding: 3px 8px; border-radius: 999px;
       background: #EEF1F4; color: var(--text-2); white-space: nowrap;
+      flex: none;
     }
     .badge.idle      { background: #EEF1F4; color: var(--text-2); }
-    .badge.starting  { background: #FFF4E0; color: var(--warn); }
-    .badge.ringing   { background: rgba(97,196,227,0.18); color: var(--accent-ink); }
-    .badge.unknown   { background: #F4E2E2; color: var(--danger); }
+    .badge.starting  { background: #FEF3C7; color: #92400E; }
+    .badge.ringing   { background: var(--accent-soft); color: var(--accent); }
+    .badge.unknown   { background: #F1F5F9; color: #475569; }
 
     .toggle-row {
       display: flex; align-items: center; gap: 10px; margin-top: 12px;
       font-size: 13px; color: var(--text-2);
     }
     .switch { position: relative; width: 38px; height: 22px; flex: none; }
-    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
     .switch span {
       position: absolute; inset: 0; background: #D5D7DC; border-radius: 999px;
       transition: background .2s ease;
@@ -85,17 +162,22 @@
     }
     .switch input:checked + span { background: var(--accent); }
     .switch input:checked + span::after { transform: translateX(16px); }
+    .switch input:focus-visible + span { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
     .actions { display: flex; gap: 10px; margin-top: 12px; }
     button {
       flex: 1; padding: 11px 14px; border-radius: 12px; border: none;
       font: inherit; font-weight: 600; font-size: 15px; cursor: pointer;
       transition: transform .08s ease, background .15s ease, color .15s ease;
+      min-height: 44px;
     }
     button:active { transform: scale(0.98); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
     .btn-find { background: var(--accent); color: #fff; }
-    .btn-stop { background: #fff; color: var(--accent-ink); border: 1px solid var(--accent-ink); }
+    .btn-find:hover { background: #085F7F; }
+    .btn-stop { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+    .btn-stop:hover { background: var(--accent-soft); }
 
     .events {
       margin-top: 22px; background: var(--card); border: 1px solid var(--line);
@@ -106,7 +188,7 @@
     .ev:first-of-type { border-top: none; }
     .ev-dot { width: 8px; height: 8px; border-radius: 999px; margin-top: 7px; flex: none; background: var(--accent); }
     .ev-body { flex: 1; min-width: 0; }
-    .ev-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ev-line { word-break: break-word; }
     .ev-meta { color: var(--text-2); font-size: 11px; margin-top: 2px; }
 
     .toast {
@@ -114,29 +196,52 @@
       background: #1A1D21; color: #fff; padding: 10px 16px; border-radius: 999px;
       font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s ease;
       max-width: 86vw;
+      z-index: 100;
     }
     .toast.show { opacity: 0.95; }
+
+    @media (max-width: 480px) {
+      .item-name { font-size: 15px; }
+      .badge { font-size: 10px; padding: 3px 7px; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Find<span class="it">It</span> · 寻物</h1>
     <div class="me">
-      <input id="user-id"   placeholder="学号 / ID(例 student_a)" autocomplete="off">
-      <input id="user-name" placeholder="姓名(例 张三)"          autocomplete="off">
+      <label class="sr-only" for="user-id">学号 / ID</label>
+      <input id="user-id"   placeholder="学号 / ID(例 student_a)" autocomplete="off" aria-label="学号或ID">
+      <label class="sr-only" for="user-name">姓名</label>
+      <input id="user-name" placeholder="姓名(例 张三)"          autocomplete="off" aria-label="姓名">
     </div>
+    <div class="search-row">
+      <div class="search-wrap">
+        <label class="sr-only" for="search-input">搜索物品</label>
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input id="search-input" type="search" placeholder="搜索物品名称、位置、编号..." autocomplete="off" aria-describedby="search-status">
+      </div>
+      <button class="btn-clear" id="btn-clear" type="button" aria-label="清除搜索">清除</button>
+    </div>
+    <div id="search-status" class="result-count" role="status" aria-live="polite"></div>
   </header>
 
   <main>
-    <div id="items"></div>
-
-    <section class="events">
-      <h2>最近事件</h2>
-      <div id="events"></div>
-    </section>
+    <div class="items-col">
+      <div id="items" role="region" aria-label="物品列表"></div>
+    </div>
+    <div class="events-col">
+      <section class="events" aria-labelledby="events-heading">
+        <h2 id="events-heading">最近事件</h2>
+        <div id="events" role="list"></div>
+      </section>
+    </div>
   </main>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
 // ============ 用户身份(多用户) ============
@@ -153,7 +258,7 @@ function userColor(userId) {
   let h = 0;
   for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) & 0xffffffff;
   const hue = Math.abs(h) % 360;
-  return `hsl(${hue}, 65%, 48%)`;
+  return `hsl(${hue}, 65%, 42%)`;
 }
 
 // ============ Toast ============
@@ -163,23 +268,34 @@ function toast(msg) {
   elToast.textContent = msg;
   elToast.classList.add("show");
   clearTimeout(toastT);
-  toastT = setTimeout(() => elToast.classList.remove("show"), 2200);
+  toastT = setTimeout(() => elToast.classList.remove("show"), 3000);
 }
 
-// ============ 物品列表 ============
+// ============ 物品列表 + 搜索 ============
 const elItems = document.getElementById("items");
+const elSearchInput = document.getElementById("search-input");
+const elBtnClear = document.getElementById("btn-clear");
+const elSearchStatus = document.getElementById("search-status");
 let itemsCache = [];
-// item_id -> 用户选的蜂鸣器开关(默认 true);改一次记 localStorage 一次,demo 时方便重现
+let itemsLoading = true;
+let itemsError = null;
 const buzzerPref = {};
 
 async function loadItems() {
-  // Don't let a missing/broken catalog (503) or a network error blow up startup —
-  // show an offline banner and an empty list instead of a blank, half-initialised page.
+  itemsLoading = true;
+  itemsError = null;
+  renderItems();
   try {
     const r = await fetch("/api/items", { cache: "no-store" });
     if (!r.ok) {
-      toast(`物品列表加载失败 (${r.status})`);
-      itemsCache = []; renderItems({}); setOffline(true);
+      if (r.status === 503) {
+        itemsError = { type: "catalog", status: r.status, msg: "物品目录服务不可用(503)" };
+      } else {
+        itemsError = { type: "http", status: r.status, msg: `物品列表加载失败 (HTTP ${r.status})` };
+      }
+      itemsCache = [];
+      itemsLoading = false;
+      renderItems();
       return;
     }
     const data = await r.json();
@@ -188,69 +304,245 @@ async function loadItems() {
       const saved = localStorage.getItem("findit.buzzer." + it.id);
       buzzerPref[it.id] = saved === null ? true : saved === "1";
     });
-    renderItems({});
+    itemsLoading = false;
+    itemsError = null;
+    renderItems();
   } catch (err) {
     console.warn("loadItems 失败:", err);
-    toast("无法加载物品列表(网络错误)");
-    itemsCache = []; renderItems({}); setOffline(true);
+    itemsError = { type: "network", msg: "无法加载物品列表(网络错误)" };
+    itemsCache = [];
+    itemsLoading = false;
+    renderItems();
   }
 }
 
-function renderItems(devices) {
-  elItems.innerHTML = itemsCache.map(it => {
-    const dev = devices[it.device_id] || {};
-    const state = dev.state || "idle";
-    const ringing = state === "ringing" || state === "starting";
-    const buzzer = buzzerPref[it.id];
-    return `
-      <div class="item" data-item="${escapeHtml(it.id)}">
-        <div class="item-head">
-          <div>
-            <div class="item-name">${escapeHtml(it.name)}</div>
-            <div class="item-loc">${escapeHtml(it.location)} · ${escapeHtml(it.device_id)}</div>
-          </div>
-          <span class="badge ${state}">${labelOf(state)}</span>
-        </div>
-        <label class="toggle-row">
-          <span class="switch">
-            <input type="checkbox" data-buzzer="${it.id}" ${buzzer ? "checked" : ""}>
-            <span></span>
-          </span>
-          <span>${buzzer ? "响铃 + 亮灯" : "静音 · 只亮灯"}</span>
-        </label>
-        <div class="actions">
-          <button class="btn-find" data-find="${it.id}" ${ringing ? "disabled" : ""}>找它</button>
-          <button class="btn-stop" data-stop="${it.id}" ${ringing ? "" : "disabled"}>停止</button>
-        </div>
-      </div>
-    `;
-  }).join("");
+function getFilteredItems() {
+  const q = elSearchInput.value.trim().toLowerCase();
+  if (!q) return itemsCache;
+  return itemsCache.filter(it => {
+    const fields = [
+      it.id || "",
+      it.name || "",
+      it.name_en || "",
+      it.location || "",
+      it.location_en || "",
+      it.device_id || "",
+    ];
+    return fields.some(f => String(f).toLowerCase().includes(q));
+  });
 }
+
+function renderItems(devices) {
+  const devMap = devices || {};
+  const filtered = getFilteredItems();
+  const total = itemsCache.length;
+  const shown = filtered.length;
+
+  while (elItems.firstChild) elItems.removeChild(elItems.firstChild);
+
+  if (itemsLoading) {
+    const div = document.createElement("div");
+    div.className = "loading-state";
+    div.setAttribute("role", "status");
+    div.textContent = "正在加载物品列表...";
+    elItems.appendChild(div);
+    elSearchStatus.textContent = "";
+    return;
+  }
+
+  if (itemsError) {
+    const div = document.createElement("div");
+    div.className = "error-state";
+    div.setAttribute("role", "alert");
+
+    const title = document.createElement("div");
+    title.className = "error-title";
+    title.textContent = "物品目录加载失败";
+    div.appendChild(title);
+
+    const msg = document.createElement("div");
+    msg.className = "error-msg";
+    msg.textContent = itemsError.msg;
+    div.appendChild(msg);
+
+    const btn = document.createElement("button");
+    btn.className = "btn-retry";
+    btn.type = "button";
+    btn.textContent = "重试";
+    btn.addEventListener("click", () => loadItems());
+    div.appendChild(btn);
+
+    elItems.appendChild(div);
+    elSearchStatus.textContent = "";
+    return;
+  }
+
+  if (elSearchInput.value.trim()) {
+    if (shown === 0) {
+      elSearchStatus.textContent = `未找到匹配结果 (共 ${total} 条)`;
+    } else {
+      elSearchStatus.textContent = `找到 ${shown} 条结果 (共 ${total} 条)`;
+    }
+  } else {
+    elSearchStatus.textContent = `共 ${total} 条物品`;
+  }
+
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    if (elSearchInput.value.trim()) {
+      const icon = document.createElement("div");
+      icon.className = "icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = "🔍";
+      empty.appendChild(icon);
+      const t1 = document.createElement("div");
+      t1.textContent = "没有找到匹配的物品";
+      empty.appendChild(t1);
+      const t2 = document.createElement("div");
+      t2.style.fontSize = "12px";
+      t2.style.marginTop = "4px";
+      t2.textContent = "试试其他关键词";
+      empty.appendChild(t2);
+    } else {
+      empty.textContent = "暂无物品数据";
+    }
+    elItems.appendChild(empty);
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  filtered.forEach(it => {
+    const dev = devMap[it.device_id] || {};
+    const stateRaw = dev.state || "unknown";
+    const state = KNOWN_STATES.has(stateRaw) ? stateRaw : "unknown";
+    const isRinging = state === "ringing";
+    const isStarting = state === "starting";
+    const isBusy = isRinging || isStarting;
+    const buzzer = buzzerPref[it.id] !== false;
+
+    const itemDiv = document.createElement("div");
+    itemDiv.className = "item";
+    itemDiv.dataset.itemId = it.id;
+
+    const head = document.createElement("div");
+    head.className = "item-head";
+
+    const nameWrap = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "item-name";
+    name.textContent = it.name || "(无名称)";
+    nameWrap.appendChild(name);
+    const loc = document.createElement("div");
+    loc.className = "item-loc";
+    loc.textContent = (it.location || "未知位置") + " · " + (it.device_id || "未知设备");
+    nameWrap.appendChild(loc);
+    head.appendChild(nameWrap);
+
+    const badge = document.createElement("span");
+    badge.className = "badge " + state;
+    badge.textContent = labelOf(state);
+    head.appendChild(badge);
+    itemDiv.appendChild(head);
+
+    const toggleRow = document.createElement("label");
+    toggleRow.className = "toggle-row";
+
+    const sw = document.createElement("span");
+    sw.className = "switch";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.buzzerFor = it.id;
+    cb.checked = !!buzzer;
+    cb.setAttribute("aria-label", (it.name || "物品") + " 蜂鸣器开关");
+    sw.appendChild(cb);
+    const swTrack = document.createElement("span");
+    sw.appendChild(swTrack);
+    toggleRow.appendChild(sw);
+
+    const toggleLabel = document.createElement("span");
+    toggleLabel.textContent = buzzer ? "响铃 + 亮灯" : "静音 · 只亮灯";
+    toggleRow.appendChild(toggleLabel);
+    itemDiv.appendChild(toggleRow);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    const btnFind = document.createElement("button");
+    btnFind.className = "btn-find";
+    btnFind.type = "button";
+    btnFind.dataset.findItem = it.id;
+    btnFind.textContent = "找它";
+    btnFind.setAttribute("aria-label", "找它：" + (it.name || "物品"));
+    if (isBusy) {
+      btnFind.disabled = true;
+      btnFind.setAttribute("aria-disabled", "true");
+    }
+    actions.appendChild(btnFind);
+
+    const btnStop = document.createElement("button");
+    btnStop.className = "btn-stop";
+    btnStop.type = "button";
+    btnStop.dataset.stopItem = it.id;
+    btnStop.textContent = "停止";
+    btnStop.setAttribute("aria-label", "停止：" + (it.name || "物品"));
+    if (!isBusy) {
+      btnStop.disabled = true;
+      btnStop.setAttribute("aria-disabled", "true");
+    }
+    actions.appendChild(btnStop);
+
+    itemDiv.appendChild(actions);
+    frag.appendChild(itemDiv);
+  });
+  elItems.appendChild(frag);
+}
+
+const KNOWN_STATES = new Set(["idle", "starting", "ringing", "unknown"]);
 
 function labelOf(state) {
   return ({
     idle:     "待机",
-    starting: "启动中",
+    starting: "等待确认",
     ringing:  "响铃中",
-    unknown:  "未连接",
-  }[state]) || state;
+    unknown:  "状态未知",
+  }[state]) || "未知";
 }
 
-// 事件委托:Find / Stop / 蜂鸣器 toggle
-elItems.addEventListener("click", async (e) => {
-  const find = e.target.closest("[data-find]");
-  const stop = e.target.closest("[data-stop]");
-  if (find) return doAction(find.dataset.find, "start");
-  if (stop) return doAction(stop.dataset.stop, "stop");
+elSearchInput.addEventListener("input", () => {
+  refreshOnceLight();
 });
+
+elBtnClear.addEventListener("click", () => {
+  elSearchInput.value = "";
+  refreshOnceLight();
+  elSearchInput.focus();
+});
+
+elSearchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    elSearchInput.value = "";
+    refreshOnceLight();
+  }
+});
+
+// 事件委托:Find / Stop
+elItems.addEventListener("click", async (e) => {
+  const find = e.target.closest("[data-find-item]");
+  const stop = e.target.closest("[data-stop-item]");
+  if (find && !find.disabled) return doAction(find.dataset.findItem, "start");
+  if (stop && !stop.disabled) return doAction(stop.dataset.stopItem, "stop");
+});
+
+// 事件委托:蜂鸣器 toggle
 elItems.addEventListener("change", (e) => {
-  const t = e.target.closest("[data-buzzer]");
+  const t = e.target.closest("[data-buzzer-for]");
   if (!t) return;
-  const id = t.dataset.buzzer;
+  const id = t.dataset.buzzerFor;
   buzzerPref[id] = t.checked;
   localStorage.setItem("findit.buzzer." + id, t.checked ? "1" : "0");
-  // 立刻刷新文案
-  refreshOnce();
+  const label = t.closest(".toggle-row")?.querySelector("span:last-child");
+  if (label) label.textContent = t.checked ? "响铃 + 亮灯" : "静音 · 只亮灯";
 });
 
 async function doAction(itemId, action) {
@@ -259,7 +551,7 @@ async function doAction(itemId, action) {
     user_name: elUserName.value.trim() || "Anon",
     item_id:   itemId,
     action,
-    buzzer:    buzzerPref[itemId] !== false,   // 蜂鸣器 toggle 顺势带上
+    buzzer:    buzzerPref[itemId] !== false,
   };
   try {
     const r = await fetch("/api/search-events", {
@@ -269,18 +561,32 @@ async function doAction(itemId, action) {
     });
     if (r.status === 409) {
       const j = await r.json().catch(() => ({}));
-      // 兼容 Python(嵌套 detail)与 Java(扁平)两种响应体
-      const st = j?.detail?.state || j?.state || {};
+      const st = j?.detail?.state || {};
       const who = st.current_user_name || "另一位同学";
       toast(`设备忙:${who} 正在找它`);
+      return;
+    }
+    if (r.status === 503) {
+      const j = await r.json().catch(() => ({}));
+      const err = j?.detail?.error || "";
+      if (err === "device_unavailable") {
+        toast("设备未连接,无法下达命令");
+      } else if (err === "command_unavailable") {
+        toast("命令发送失败,请稍后重试");
+      } else {
+        toast(`服务不可用 (503)`);
+      }
       return;
     }
     if (!r.ok) {
       toast(`请求失败 (${r.status})`);
       return;
     }
-    if (action === "start") toast(body.buzzer ? "已开始 · 响铃 + 亮灯" : "已开始 · 静音模式");
-    else toast("已停止");
+    if (action === "start") {
+      toast("指令已提交,等待设备确认");
+    } else {
+      toast("停止指令已提交,等待设备确认");
+    }
   } catch (err) {
     toast("网络错误");
   } finally {
@@ -291,6 +597,13 @@ async function doAction(itemId, action) {
 // ============ 状态轮询 + 事件流 ============
 const elEvents = document.getElementById("events");
 
+function refreshOnceLight() {
+  const cachedDevices = _lastDevices || {};
+  renderItems(cachedDevices);
+}
+
+let _lastDevices = {};
+
 async function refreshOnce() {
   try {
     const [dr, er] = await Promise.all([
@@ -300,13 +613,14 @@ async function refreshOnce() {
     if (!dr.ok || !er.ok) throw new Error("bad status " + dr.status + "/" + er.status);
     const d = await dr.json();
     const e = await er.json();
-    renderItems(d.devices || {});
+    _lastDevices = d.devices || {};
+    renderItems(_lastDevices);
     renderEvents(e.events || []);
     setOffline(false);
     return true;
   } catch (err) {
     console.warn("刷新失败:", err);
-    setOffline(true);   // 显示离线提示,而不是默默冻结成旧状态
+    setOffline(true);
     return false;
   }
 }
@@ -320,8 +634,9 @@ function setOffline(off) {
     if (!bar) {
       bar = document.createElement("div");
       bar.id = "offline-bar";
+      bar.setAttribute("role", "alert");
       bar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:999;padding:8px 12px;" +
-        "text-align:center;font-size:13px;background:#E5484D;color:#fff;";
+        "text-align:center;font-size:13px;background:#C53030;color:#fff;";
       bar.textContent = "⚠ 与后端连接中断,正在重试…(显示的可能是旧状态)";
       document.body.appendChild(bar);
     }
@@ -331,45 +646,84 @@ function setOffline(off) {
 }
 
 function renderEvents(events) {
+  while (elEvents.firstChild) elEvents.removeChild(elEvents.firstChild);
+
   if (!events.length) {
-    elEvents.innerHTML = `<div class="ev-meta">(还没有记录,试试上面的"找它"按钮)</div>`;
+    const div = document.createElement("div");
+    div.className = "ev-meta";
+    div.textContent = '(还没有记录,试试上面的"找它"按钮)';
+    elEvents.appendChild(div);
     return;
   }
-  elEvents.innerHTML = events.map(ev => {
+
+  const frag = document.createDocumentFragment();
+  events.forEach(ev => {
     const c = userColor(ev.user_id);
     const t = new Date(ev.ts * 1000).toLocaleTimeString();
-    if (ev.type === "started") {
-      return `<div class="ev">
-        <span class="ev-dot" style="background:${c}"></span>
-        <div class="ev-body">
-          <div class="ev-line"><b>${escapeHtml(ev.user_name || "?")}</b> 开始找 <b>${escapeHtml(ev.item_id)}</b>${ev.buzzer ? "" : " · 静音"}</div>
-          <div class="ev-meta">${t} · ${escapeHtml(ev.device_id || "")}</div>
-        </div>
-      </div>`;
+    const evType = ev.type || "unknown";
+
+    const evDiv = document.createElement("div");
+    evDiv.className = "ev";
+    evDiv.setAttribute("role", "listitem");
+
+    const dot = document.createElement("span");
+    dot.className = "ev-dot";
+    dot.style.background = c;
+    dot.setAttribute("aria-hidden", "true");
+    evDiv.appendChild(dot);
+
+    const body = document.createElement("div");
+    body.className = "ev-body";
+
+    const line = document.createElement("div");
+    line.className = "ev-line";
+
+    if (evType === "started") {
+      const b1 = document.createElement("b");
+      b1.textContent = ev.user_name || "?";
+      line.appendChild(b1);
+      line.appendChild(document.createTextNode(" 发起定位 "));
+      const b2 = document.createElement("b");
+      b2.textContent = ev.item_id || "";
+      line.appendChild(b2);
+      if (!ev.buzzer) line.appendChild(document.createTextNode(" · 静音"));
+    } else if (evType === "device_ringing") {
+      line.appendChild(document.createTextNode("设备确认响铃: "));
+      const b = document.createElement("b");
+      b.textContent = ev.item_id || "";
+      line.appendChild(b);
+    } else if (evType === "stopped") {
+      const who = document.createTextNode(ev.user_name || "(系统)");
+      line.appendChild(who);
+      line.appendChild(document.createTextNode(" 停止 "));
+      const b = document.createElement("b");
+      b.textContent = ev.item_id || "";
+      line.appendChild(b);
+      line.appendChild(document.createTextNode(" · " + stopLabel(ev.stop_reason)));
+    } else {
+      line.textContent = evType || "未知事件";
     }
-    return `<div class="ev">
-      <span class="ev-dot" style="background:${c}"></span>
-      <div class="ev-body">
-        <div class="ev-line">${escapeHtml(ev.user_name || "?") || "(系统)"} 停止 <b>${escapeHtml(ev.item_id || "")}</b> · ${escapeHtml(stopLabel(ev.stop_reason))}</div>
-        <div class="ev-meta">${t} · ${escapeHtml(ev.device_id || "")}</div>
-      </div>
-    </div>`;
-  }).join("");
+    body.appendChild(line);
+
+    const meta = document.createElement("div");
+    meta.className = "ev-meta";
+    meta.textContent = t + " · " + (ev.device_id || "");
+    body.appendChild(meta);
+
+    evDiv.appendChild(body);
+    frag.appendChild(evDiv);
+  });
+  elEvents.appendChild(frag);
 }
 
 function stopLabel(r) {
-  return ({ button: "按钮停止", timeout: "到时自停", backend: "App 停止" })[r] || r || "停止";
-}
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  return ({ button: "按钮停止", timeout: "到时自停", backend: "App 停止", auto: "自动停止" })[r] || r || "停止";
 }
 
 // ============ 启动 ============
 (async () => {
   await loadItems();
   await refreshOnce();
-  // 轮询带退避:正常每 1.5s;后端故障时逐步退避到最多 30s,恢复后立刻回到 1.5s ——
-  // 避免后端/ broker 宕机时被前端每 1.5s 刷爆(多用户场景尤甚)。
   let pollDelay = 1500;
   (function loop() {
     setTimeout(async () => {

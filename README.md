@@ -5,12 +5,12 @@
 # FindItem · 寻物
 
 **Light up the bin that holds your part.**
-A decentralized parts locator — search a part, the right storage box rings and glows.
+A reference parts-locator prototype with distributed devices and a centralized FastAPI/MQTT control plane.
 
 [![CI](https://github.com/HarryXin0919/FindItem/actions/workflows/ci.yml/badge.svg)](https://github.com/HarryXin0919/FindItem/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 ![Platform](https://img.shields.io/badge/MCU-ESP32-informational)
-![Backend](https://img.shields.io/badge/backend-FastAPI%20%7C%20Spring%20Boot-009688)
+![Backend](https://img.shields.io/badge/backend-FastAPI%20reference-009688)
 ![Transport](https://img.shields.io/badge/transport-MQTT-660066)
 
 [English](#english) · [中文](#中文)
@@ -21,13 +21,21 @@ A decentralized parts locator — search a part, the right storage box rings and
 
 ## English
 
+> **Status — reference prototype.** This repository contains the FastAPI/MQTT
+> control plane, ESP32-C3 firmware, web client, and automated tests. The current
+> hardware target is a single GPIO LED, buzzer, and stop button. The
+> [public experience](https://harryxin0919.github.io/trae-contest-2026/finditem/)
+> is a static simulation: it does not connect to a live backend, broker, or
+> physical device. Automated tests and firmware compilation are not a substitute
+> for end-to-end hardware validation, which has not yet been completed for this
+> competition build.
+
 ### What it does
 
-FindItem turns any set of storage bins into a searchable, addressable system. You
-search for a part from your phone or a web page; the bin that holds it **lights an
-LED and sounds a buzzer** so you can grab it in seconds. Each bin runs independently
-(decentralized) and is driven over MQTT, so the system scales from one drawer to a
-whole wall without a central controller in the loop.
+FindItem is designed to turn storage bins into a searchable, addressable system.
+You search for a part from a phone or web page; the reference control path sends a
+command to the target ESP32-C3, which drives an **LED and buzzer**. Devices are
+distributed and driven over MQTT via a centralized FastAPI control plane.
 
 Built for makerspaces, labs, and robotics teams — anywhere "which box is it in?" is
 a daily question.
@@ -37,7 +45,7 @@ a daily question.
 ```mermaid
 flowchart LR
     UI["📱 Phone / Web UI"] -->|"HTTPS · POST /api/search-events"| BE
-    BE["⚙️ Backend<br/>FastAPI · or Spring Boot<br/>(the only MQTT publisher)"]
+    BE["⚙️ Backend<br/>FastAPI reference<br/>(the only MQTT publisher)"]
     CAT[("📒 items.json<br/>hot-reloadable catalog")] -. "read per request" .-> BE
     BE -->|"publish findit/device/{id}/command"| BR["🦟 Mosquitto<br/>MQTT broker (auth)"]
     BR -->|"command"| ESP["🔌 ESP32-C3<br/>LED + buzzer + stop button"]
@@ -49,31 +57,35 @@ flowchart LR
 The frontend only ever talks HTTPS to the backend. The backend is the single place
 that publishes MQTT commands to devices — clients never touch the broker directly;
 devices report back on a `status` topic, which the backend turns into live state and
-a multi-user event feed.
+a user-attributed recent event feed.
 
 ### Features
 
-- 🔦 **Visual + audio locate** — WS2812 / LED lights the target bin, buzzer confirms
+- 🔦 **Visual + audio locate** — LED lights the target bin, buzzer confirms
 - 🔕 **Per-search buzzer toggle** — light-only mode for quiet rooms, end to end
-- 👥 **Multi-user** — concurrent searches, each user gets a distinct color
 - 🔁 **Live status & event feed** — poll device state and a recent-activity timeline
 - 🧩 **Hot-reloadable catalog** — edit `config/items.json`, no backend restart
 - 🔒 **Password-auth MQTT + HTTPS frontend** — broker requires credentials (unencrypted on the LAN; enable an 8883 TLS listener for production); the Python backend serves the frontend over HTTPS with self-signed certs
+
+> **Not implemented in this reference build**: WS2812/RGB output, multi-user
+> multi-color concurrency, LWT/heartbeat offline detection, persistent SQLite
+> history, Feishu login, battery monitoring, and admin CRUD.
 
 ### Tech stack
 
 | Layer | Tech |
 |---|---|
 | Firmware | ESP32 · Arduino (C++) · PubSubClient · ArduinoJson |
-| Backend | Python · FastAPI · paho-mqtt **— or** Java · Spring Boot · Eclipse Paho |
+| Backend | Python · FastAPI · paho-mqtt |
 | Broker | Mosquitto (MQTT) |
 | Frontend | Vanilla HTML / CSS / JS |
 
-> Three interchangeable backends ship with the same REST + MQTT contract — run any
-> one against the same firmware, broker, and frontend:
-> - [`backend/`](./backend) — Python · FastAPI
+> The Python FastAPI backend is the primary reference implementation. Java/Spring Boot
+> backends exist in the repository but are not guaranteed to implement the full
+> contract — verify feature parity before using them.
+> - [`backend/`](./backend) — Python · FastAPI (reference implementation)
 > - [`backend-java/`](./backend-java) — Java 17 · Spring Boot 3.2
-> - [`backend-java8/`](./backend-java8) — Java 8 · Spring Boot 2.7 (no toolchain upgrade needed)
+> - [`backend-java8/`](./backend-java8) — Java 8 · Spring Boot 2.7
 
 ### Quick start (Windows + PowerShell)
 
@@ -173,11 +185,17 @@ HTTPS with Let's Encrypt or a Cloudflare Tunnel.
 
 ## 中文
 
+> **状态——参考原型。** 本仓库包含 FastAPI/MQTT 控制面、ESP32-C3 固件、网页
+> 客户端与自动化测试。当前硬件目标是单色 GPIO LED、蜂鸣器和停止按钮。
+> [公开体验页](https://harryxin0919.github.io/trae-contest-2026/finditem/)
+> 是静态模拟，不连接真实后端、MQTT broker 或实体设备。自动化测试和固件编译
+> 不等于真机端到端验证；本次参赛版本尚未完成该验证。
+
 ### 是什么
 
-FindItem 把一组存储箱变成可搜索、可寻址的系统。你在手机或网页上搜一个零件,装着
-它的箱子就会**亮灯 + 响铃**,几秒内拿到。每个箱子独立运行(去中心化),通过 MQTT
-驱动,从一个抽屉到一整面墙都能扩展,无需中心控制器实时介入。
+FindItem 的设计目标是把存储箱变成可搜索、可寻址的系统。你在手机或网页上搜索
+零件，参考控制链路会向目标 ESP32-C3 下发指令，由它驱动**单色 LED + 蜂鸣器**。
+设备分布式部署，通过集中式 FastAPI/MQTT 控制面驱动。
 
 适合创客空间、实验室、机器人队 —— 任何"这玩意儿在哪个箱"是日常问题的场景。
 
@@ -194,10 +212,12 @@ FindItem 把一组存储箱变成可搜索、可寻址的系统。你在手机�
 
 - 🔦 **声光定位** —— LED 点亮目标箱,蜂鸣器确认
 - 🔕 **逐次蜂鸣器开关** —— 安静场合可只亮灯,开关贯通全链路
-- 👥 **多用户并发** —— 同时查找,每人一个独立颜色
 - 🔁 **实时状态与事件流** —— 轮询设备状态 + 近期活动时间线
 - 🧩 **热加载物品库** —— 改 `config/items.json` 不用重启后端
 - 🔒 **MQTT 鉴权 + HTTPS** —— broker 要求账密,局域网用自签证书
+
+> **当前参考版本尚未实现**：WS2812/RGB、多用户多颜色并发、LWT/心跳离线
+> 判定、SQLite 持久历史、飞书登录、电量监控和管理员 CRUD。
 
 ### 技术栈
 
@@ -207,6 +227,9 @@ FindItem 把一组存储箱变成可搜索、可寻址的系统。你在手机�
 | 后端 | Python · FastAPI · paho-mqtt |
 | Broker | Mosquitto(MQTT) |
 | 前端 | 原生 HTML / CSS / JS |
+
+> Python FastAPI 后端是主要参考实现。Java/Spring Boot 后端在仓库中存在,
+> 但不保证实现了完整契约 —— 使用前请验证功能一致性。
 
 ### 快速开始(Windows + PowerShell)
 
