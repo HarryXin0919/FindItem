@@ -29,7 +29,6 @@ from .mqtt_bridge import FindItBridge
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("finditem")
 
-# 项目根 = .../findit_mvp(从 backend/app/main.py 往上 3 层)
 BASE_DIR = Path(__file__).resolve().parents[2]
 CONFIG_PATH = BASE_DIR / "config" / "items.json"
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -44,7 +43,6 @@ bridge = FindItBridge(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # bridge.start() 已是非阻塞 + 自重连,broker 没起也不会让后端崩
     try:
         bridge.start()
     except Exception as e:
@@ -80,9 +78,7 @@ class SearchEvent(BaseModel):
     user_name: str = Field(..., min_length=1)
     item_id: str = Field(..., min_length=1)
     action: Literal["start", "stop"]
-    # 蜂鸣器开关 —— 每次 Find 时由前端勾选,默认响铃
     buzzer: bool = True
-    # 可选覆盖 items.json 里的默认时长
     duration: int | None = Field(default=None, ge=1, le=120)
 
 
@@ -105,7 +101,6 @@ def post_event(body: SearchEvent):
 
     if body.action == "start":
         duration = body.duration or item.get("duration_sec", 15)
-        # 原子 check-and-set:忙则返回 None -> 409(避免 TOCTOU 竞态)
         event_id = bridge.try_start(
             device_id=device_id,
             item_id=body.item_id,
@@ -115,12 +110,21 @@ def post_event(body: SearchEvent):
             buzzer=body.buzzer,
         )
         if event_id is None:
+            if bridge.is_busy(device_id):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "device_busy",
+                        "device_id": device_id,
+                        "state": bridge.device_state(device_id),
+                    },
+                )
             raise HTTPException(
-                status_code=409,
+                status_code=503,
                 detail={
-                    "error": "device_busy",
+                    "error": "command_unavailable",
                     "device_id": device_id,
-                    "state": bridge.device_state(device_id),
+                    "reason": "命令发送失败(broker 未连接或 publish 异常)",
                 },
             )
         return {
@@ -129,11 +133,27 @@ def post_event(body: SearchEvent):
             "device_id": device_id,
             "duration": duration,
             "buzzer": body.buzzer,
+            "status": "submitted",
+            "message": "指令已提交,等待设备确认",
         }
 
     # action == "stop"
-    bridge.send_stop(device_id, body.item_id)
-    return {"ok": True, "device_id": device_id}
+    ok = bridge.send_stop(device_id, body.item_id)
+    if not ok:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "command_unavailable",
+                "device_id": device_id,
+                "reason": "停止命令发送失败(broker 未连接或 publish 异常)",
+            },
+        )
+    return {
+        "ok": True,
+        "device_id": device_id,
+        "status": "stop_submitted",
+        "message": "停止指令已提交,等待设备确认",
+    }
 
 
 @app.get("/api/devices")
@@ -153,15 +173,13 @@ def get_events(limit: int = Query(50, ge=1, le=200)):
     return {"events": bridge.recent_events(limit=limit)}
 
 
-# ============ 飞书 H5 前端托管 ============
+# ============ 前端托管 ============
 
 @app.get("/")
 def index():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
-# /static/* 提供前端资源(目前其实就一个 index.html,留口子未来加 js/css)
-# 仅在目录存在时挂载,否则纯后端部署会在 import 期就崩(StaticFiles 默认 check_dir=True)
 if FRONTEND_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 else:
