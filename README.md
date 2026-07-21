@@ -104,6 +104,20 @@ pip install -r requirements.txt
 The backend listens on `https://0.0.0.0:8443`. On the same LAN, open
 `https://<your-laptop-ip>:8443` from a phone (accept the self-signed cert warning).
 
+### Offline locate simulator
+
+Preview item resolution, physical outputs, and the exact MQTT command without an
+ESP32, broker, or backend:
+
+```powershell
+python -m simulator.locate "NEO Motor"
+python -m simulator.locate FINDIT-002 --no-buzzer --json
+```
+
+The simulator reads the real `config/items.json` catalog. Its GPIO and buzzer
+values mirror the reference firmware, so it reports a per-device single-color LED
+rather than pretending that the current build has addressable RGB pixels.
+
 ### Flash the firmware
 
 1. Install the ESP32 board package in Arduino IDE.
@@ -164,6 +178,7 @@ backend/app/main.py         FastAPI app & REST endpoints
 backend/app/mqtt_bridge.py  MQTT client, device state, event log
 frontend/index.html         web client (with buzzer toggle)
 config/items.json           part catalog (hot-reloaded)
+simulator/locate.py         offline catalog + MQTT command preview
 mosquitto/mosquitto.conf    broker config
 esp32/findit_esp32.ino      device firmware
 scripts/*.ps1               cert / password / launch helpers
@@ -247,6 +262,19 @@ pip install -r requirements.txt
 
 后端监听 `https://0.0.0.0:8443`。同一局域网下,手机打开
 `https://<笔记本-IP>:8443`(自签证书首次会弹安全警告,选"继续访问")。
+
+### 离线定位模拟器
+
+不用连接 ESP32、MQTT broker 或后端，也能验证物品查询、实体输出和实际 MQTT
+命令：
+
+```powershell
+python -m simulator.locate "NEO 电机"
+python -m simulator.locate FINDIT-002 --no-buzzer --json
+```
+
+模拟器直接读取真实的 `config/items.json`。GPIO 与蜂鸣器参数和参考固件一致；
+当前硬件是每台设备一个单色 LED，因此不会虚构尚未实现的可寻址 RGB 灯珠接口。
 
 ### 烧录固件
 
