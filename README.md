@@ -108,10 +108,12 @@ The backend listens on `https://0.0.0.0:8443`. On the same LAN, open
 
 1. Install the ESP32 board package in Arduino IDE.
 2. Install libraries **PubSubClient** and **ArduinoJson**.
-3. Open `esp32/findit_esp32.ino` and edit the config block at the top:
-   `WIFI_SSID` / `WIFI_PASSWORD`, `MQTT_HOST` (your laptop's LAN IP), and a unique
-   `DEVICE_ID` matching an entry in `config/items.json`.
-4. Select board + port, upload. The device connects to Wi-Fi → MQTT on boot.
+3. Copy `esp32/secrets.example.h` to `esp32/secrets.h`.
+4. Edit `secrets.h`: set the Wi-Fi credentials, MQTT host/credentials, and a unique
+   `FINDITEM_DEVICE_ID` matching an entry in `config/items.json`. The local file is
+   gitignored so credentials are not committed.
+5. Open `esp32/findit_esp32.ino`, select board + port, and upload. The device
+   connects to Wi-Fi → MQTT on boot.
 
 Default wiring (override the macros at the top of the `.ino`):
 
@@ -252,9 +254,10 @@ pip install -r requirements.txt
 
 1. Arduino IDE 装好 ESP32 板包。
 2. 安装库 **PubSubClient** 和 **ArduinoJson**。
-3. 打开 `esp32/findit_esp32.ino`,改顶部配置块:`WIFI_SSID` / `WIFI_PASSWORD`、
-   `MQTT_HOST`(笔记本局域网 IP)、唯一的 `DEVICE_ID`(与 `config/items.json` 对齐)。
-4. 选板子 + 端口,上传。上电后自动连 Wi-Fi → MQTT。
+3. 将 `esp32/secrets.example.h` 复制为 `esp32/secrets.h`。
+4. 在 `secrets.h` 中填写 Wi-Fi、MQTT 主机与凭据，以及和 `config/items.json`
+   对齐的唯一 `FINDITEM_DEVICE_ID`。该本地文件已被 Git 忽略，不会提交凭据。
+5. 打开 `esp32/findit_esp32.ino`，选板子 + 端口并上传。上电后自动连 Wi-Fi → MQTT。
 
 默认接线(改顶部宏即可):
 
