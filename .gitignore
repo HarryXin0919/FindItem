@@ -10,6 +10,7 @@ runtime/
 # Secrets & certs (永远不要提交) —— 忽略整个 certs/ 目录,避免漏掉新增的密钥/CA 文件
 certs/
 mosquitto/passwords
+esp32/secrets.h
 
 # Editor / OS
 .vscode/
