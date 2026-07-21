@@ -70,4 +70,5 @@ jobs:
           # findit_esp32.ino (it lives in esp32/) into a matching sketch folder.
           mkdir -p build_sketch/findit_esp32
           cp esp32/findit_esp32.ino build_sketch/findit_esp32/
+          cp esp32/secrets.example.h build_sketch/findit_esp32/secrets.h
           arduino-cli compile --fqbn esp32:esp32:esp32c3 build_sketch/findit_esp32
