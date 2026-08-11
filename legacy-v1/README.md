@@ -49,6 +49,26 @@ cd backend-java  && mvn -B -ntp verify     # Spring Boot 3 / JDK 17
 cd backend-java8 && mvn -B -ntp verify     # Spring Boot 2.7 / JDK 8
 ```
 
+### Offline locate simulator
+
+Preview item resolution, physical outputs, and the exact MQTT command without an
+ESP32, broker, or backend:
+
+```powershell
+cd legacy-v1
+python -m simulator.locate "NEO Motor"
+python -m simulator.locate FINDIT-002 --no-buzzer --json
+```
+
+It reads this generation's real `config/items.json`. Its GPIO and buzzer values
+mirror the v1 firmware, so it reports a per-device single-color LED rather than
+pretending that build had addressable RGB pixels.
+
+> Not to be confused with the **current** system's `simulator/` at the
+> repository root, which models five controllers and fifty WS2812 pixels. The
+> two are different generations and read different catalogs — this one resolves
+> `parents[1] / "config" / "items.json"`, which lands inside `legacy-v1/`.
+
 Broker config and the certificate/password helper scripts are shared with the
 current system and stay at the repository root: `mosquitto/`,
 `scripts/gen-certs.ps1`, `scripts/init-mqtt-passwd.ps1`.
