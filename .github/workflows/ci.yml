@@ -198,4 +198,7 @@ jobs:
           # arduino-cli needs the .ino inside a folder of the SAME name.
           mkdir -p build_sketch/findit_esp32
           cp esp32/findit_esp32.ino build_sketch/findit_esp32/
+          # secrets.h is gitignored, so provision it from the template. CI never
+          # sees a real credential - the placeholders are enough to compile.
+          cp esp32/secrets.example.h build_sketch/findit_esp32/secrets.h
           arduino-cli compile --fqbn esp32:esp32:esp32c3 build_sketch/findit_esp32

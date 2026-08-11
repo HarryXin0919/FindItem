@@ -10,21 +10,22 @@
  *   PubSubClient (Nick O'Leary)
  *   ArduinoJson (Benoit Blanchon)
  *
- * 每台设备只需要改 DEVICE_ID。命令载荷里的 buzzer 字段决定要不要响铃。
+ * 每台设备只需要在 secrets.h 中改 DEVICE_ID。命令载荷里的 buzzer 字段决定要不要响铃。
  */
 
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include "secrets.h"
 
-// =============== 1. 配置区(逐台修改) ===============
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* MQTT_HOST     = "192.168.1.100";   // 笔记本 LAN IP
-const uint16_t MQTT_PORT  = 1883;
-const char* MQTT_USER     = "findit_backend";
-const char* MQTT_PASS     = "findit123";
-const char* DEVICE_ID     = "esp32-001";        // 每台不同!和 items.json device_id 对齐
+// =============== 1. 配置区(secrets.h 不提交到 Git) ===============
+const char* WIFI_SSID     = FINDITEM_WIFI_SSID;
+const char* WIFI_PASSWORD = FINDITEM_WIFI_PASSWORD;
+const char* MQTT_HOST     = FINDITEM_MQTT_HOST;
+const uint16_t MQTT_PORT  = FINDITEM_MQTT_PORT;
+const char* MQTT_USER     = FINDITEM_MQTT_USER;
+const char* MQTT_PASS     = FINDITEM_MQTT_PASSWORD;
+const char* DEVICE_ID     = FINDITEM_DEVICE_ID;
 
 const int PIN_LED    = 2;
 const int PIN_BUZZER = 5;

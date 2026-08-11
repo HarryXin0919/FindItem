@@ -49,6 +49,21 @@ cd backend-java  && mvn -B -ntp verify     # Spring Boot 3 / JDK 17
 cd backend-java8 && mvn -B -ntp verify     # Spring Boot 2.7 / JDK 8
 ```
 
+### Flashing the v1 sketch
+
+Credentials are not tracked. Copy the template and fill it in locally —
+`secrets.h` is git-ignored:
+
+```bash
+cd legacy-v1/esp32
+cp secrets.example.h secrets.h        # then edit SSID / MQTT host / password / DEVICE_ID
+```
+
+`DEVICE_ID` differs per board and must match a `device_id` in
+`config/items.json`. CI compiles this sketch with the template's placeholders,
+so a missing `secrets.h` fails locally rather than silently flashing someone
+else's settings.
+
 ### Offline locate simulator
 
 Preview item resolution, physical outputs, and the exact MQTT command without an
