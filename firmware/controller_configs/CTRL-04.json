@@ -1,0 +1,21 @@
+{
+  "controller_id": "CTRL-04",
+  "controller_index": 4,
+  "global_drawer_start": 31,
+  "global_drawer_end": 40,
+  "led_count": 10,
+  "mqtt_base_topic": "findit/controllers/CTRL-04",
+  "mqtt_topics": {
+    "command": "findit/controllers/CTRL-04/command",
+    "ack": "findit/controllers/CTRL-04/ack",
+    "status": "findit/controllers/CTRL-04/status",
+    "heartbeat": "findit/controllers/CTRL-04/heartbeat"
+  },
+  "fw_version": "fw-0.11.0",
+  "config_version": "cfg-1",
+  "build_flag": "-DFINDIT_CONTROLLER_INDEX=4",
+  "mcp23017_address": "0x20",
+  "i2c_sda_gpio": 4,
+  "i2c_scl_gpio": 5,
+  "ws2812_data_gpio": 3
+}

@@ -4,13 +4,13 @@
 
 # FindItem · 寻物
 
-**Light up the bin that holds your part.**
-A reference parts-locator prototype with distributed devices and a centralized FastAPI/MQTT control plane.
+**Search a part. The right drawer lights up.**
 
 [![CI](https://github.com/HarryXin0919/FindItem/actions/workflows/ci.yml/badge.svg)](https://github.com/HarryXin0919/FindItem/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-![Platform](https://img.shields.io/badge/MCU-ESP32-informational)
-![Backend](https://img.shields.io/badge/backend-FastAPI%20reference-009688)
+![MCU](https://img.shields.io/badge/MCU-ESP32--C3%20%C3%97%205-informational)
+![Drawers](https://img.shields.io/badge/drawers-50-orange)
+![Backend](https://img.shields.io/badge/backend-FastAPI%20%2B%20PostgreSQL-009688)
 ![Transport](https://img.shields.io/badge/transport-MQTT-660066)
 
 [English](#english) · [中文](#中文)
@@ -21,284 +21,267 @@ A reference parts-locator prototype with distributed devices and a centralized F
 
 ## English
 
-> **Status — reference prototype.** This repository contains the FastAPI/MQTT
-> control plane, ESP32-C3 firmware, web client, and automated tests. The current
-> hardware target is a single GPIO LED, buzzer, and stop button. The
-> [public experience](https://harryxin0919.github.io/trae-contest-2026/finditem/)
-> is a static simulation: it does not connect to a live backend, broker, or
-> physical device. Automated tests and firmware compilation are not a substitute
-> for end-to-end hardware validation, which has not yet been completed for this
-> competition build.
+> **Status — software validated, hardware bring-up not yet done.**
+> The backend, frontend, MQTT contract and a five-node simulator are complete and
+> tested end to end (178 backend tests, a 50-route matrix, and firmware that
+> compiles for all five controller identities). **No physical controller has been
+> brought up yet.** Nothing in this repository should be read as a claim that the
+> hardware has been validated.
 
 ### What it does
 
-FindItem is designed to turn storage bins into a searchable, addressable system.
-You search for a part from a phone or web page; the reference control path sends a
-command to the target ESP32-C3, which drives an **LED and buzzer**. Devices are
-distributed and driven over MQTT via a centralized FastAPI control plane.
+Fifty drawers, five controllers, one search box. You type a part name on the web
+dashboard; the backend resolves it to a drawer, routes the drawer to the
+controller that owns it, and publishes a locate command over MQTT. Exactly one
+WS2812 pixel lights up — the one in front of your part.
 
-Built for makerspaces, labs, and robotics teams — anywhere "which box is it in?" is
+Built for makerspaces, labs and robotics teams, where "which drawer is it in?" is
 a daily question.
+
+### Architecture
+
+```
+(ESP32-C3 + MCP23017 + 10 × WS2812) × 5  =  50 addressable drawers
+```
+
+Five identical nodes rather than one big controller or fifty tiny ones: wiring
+stays in manageable groups, only five Wi-Fi clients need provisioning, and a
+failed node costs you ten drawers instead of the whole cabinet. The reasoning is
+written down in [ADR-001](docs/adr/ADR-001-five-controllers.md).
+
+| Controller | Drawers | Local LED index |
+|---|---|---|
+| CTRL-01 | 1–10 | 0–9 |
+| CTRL-02 | 11–20 | 0–9 |
+| CTRL-03 | 21–30 | 0–9 |
+| CTRL-04 | 31–40 | 0–9 |
+| CTRL-05 | 41–50 | 0–9 |
 
 ### How it works
 
 ```mermaid
 flowchart LR
-    UI["📱 Phone / Web UI"] -->|"HTTPS · POST /api/search-events"| BE
-    BE["⚙️ Backend<br/>FastAPI reference<br/>(the only MQTT publisher)"]
-    CAT[("📒 items.json<br/>hot-reloadable catalog")] -. "read per request" .-> BE
-    BE -->|"publish findit/device/{id}/command"| BR["🦟 Mosquitto<br/>MQTT broker (auth)"]
-    BR -->|"command"| ESP["🔌 ESP32-C3<br/>LED + buzzer + stop button"]
-    ESP -->|"publish .../status"| BR
-    BR -->|"status: state · stop_reason"| BE
-    BE -. "/api/events live feed" .-> UI
+    UI["🖥️ React dashboard<br/>search + 50-drawer map"]
+    UI -->|"GET /api/search"| BE
+    BE["⚙️ FastAPI backend<br/>search · routing · command"]
+    DB[("🐘 PostgreSQL<br/>items · drawers · controllers<br/>commands · device events")]
+    DB <-->|"drawer → controller, LED"| BE
+    BE -->|"publish findit/controllers/CTRL-0x/command"| BR["🦟 MQTT broker"]
+    BR --> N1["🔌 CTRL-01<br/>ESP32-C3 + MCP23017<br/>10 × WS2812"]
+    BR --> N5["🔌 CTRL-05<br/>…"]
+    N1 -->|"findit/controllers/CTRL-01/ack"| BR
+    BR -->|"ACK → command acked"| BE
 ```
 
-The frontend only ever talks HTTPS to the backend. The backend is the single place
-that publishes MQTT commands to devices — clients never touch the broker directly;
-devices report back on a `status` topic, which the backend turns into live state and
-a user-attributed recent event feed.
+The drawer→controller mapping is a single formula, used by the seed, the router,
+the simulator and the firmware alike:
 
-### Features
+```python
+controller = (drawer - 1) // 10 + 1     # 1..5
+led_index  = (drawer - 1) %  10         # 0..9
+```
 
-- 🔦 **Visual + audio locate** — LED lights the target bin, buzzer confirms
-- 🔕 **Per-search buzzer toggle** — light-only mode for quiet rooms, end to end
-- 🔁 **Live status & event feed** — poll device state and a recent-activity timeline
-- 🧩 **Hot-reloadable catalog** — edit `config/items.json`, no backend restart
-- 🔒 **Password-auth MQTT + HTTPS frontend** — broker requires credentials (unencrypted on the LAN; enable an 8883 TLS listener for production); the Python backend serves the frontend over HTTPS with self-signed certs
+There is deliberately no broadcast path. A controller id is validated at one
+choke point that rejects wildcards, `all`, and unknown ids, so "light every
+drawer" is not expressible.
 
-> **Not implemented in this reference build**: WS2812/RGB output, multi-user
-> multi-color concurrency, LWT/heartbeat offline detection, persistent SQLite
-> history, Feishu login, battery monitoring, and admin CRUD.
+### Repository layout
 
-### Tech stack
-
-| Layer | Tech |
+| Path | What |
 |---|---|
-| Firmware | ESP32 · Arduino (C++) · PubSubClient · ArduinoJson |
-| Backend | Python · FastAPI · paho-mqtt |
-| Broker | Mosquitto (MQTT) |
-| Frontend | Vanilla HTML / CSS / JS |
+| `backend/` | FastAPI app — search, routing, command service, MQTT contract, 178 tests |
+| `firmware/` | **One** ESP32-C3 sketch, five identities via `-DFINDIT_CONTROLLER_INDEX=1..5` |
+| `frontend/` | React + Vite dashboard: search, 50-drawer map, 5 controller status cards |
+| `simulator/` | Five-node / fifty-LED simulator speaking the same MQTT contract as the firmware |
+| `hardware-tests/` | Incremental bring-up sketches, serial baseline → complete node → five-node |
+| `docs/` | Firmware architecture, provisioning, wiring, debugging, deployment, ADR, diagrams |
+| `legacy-v1/` | The previous single-device prototype (LED + buzzer), including both Java backends. Frozen but still built by CI — see [legacy-v1/README.md](legacy-v1/README.md) |
 
-> The Python FastAPI backend is the primary reference implementation. Java/Spring Boot
-> backends exist in the repository but are not guaranteed to implement the full
-> contract — verify feature parity before using them.
-> - [`backend/`](./backend) — Python · FastAPI (reference implementation)
-> - [`backend-java/`](./backend-java) — Java 17 · Spring Boot 3.2
-> - [`backend-java8/`](./backend-java8) — Java 8 · Spring Boot 2.7
+### Quick start
 
-### Quick start (Windows + PowerShell)
+Everything below runs with **no hardware attached** — `device_mode` defaults to
+`simulator`, so the five controllers run inside the backend process.
 
-> Requires Python, Mosquitto, and Git for Windows (ships with `openssl`).
+```bash
+# 1. PostgreSQL
+docker compose -f docker-compose.postgres.yml up -d
 
-```powershell
+# 2. Backend (first time)
+cd backend
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m app.seed          # 5 controllers, 50 drawers, 12 items
 
-.\scripts\init-mqtt-passwd.ps1   # create the MQTT password file
-.\scripts\gen-certs.ps1          # generate a self-signed HTTPS cert
-.\scripts\start-all.ps1          # start Mosquitto + the backend
+# every time
+.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+
+# 3. Frontend
+cd frontend
+npm install
+npm run dev                                    # http://localhost:5173
 ```
 
-The backend listens on `https://0.0.0.0:8443`. On the same LAN, open
-`https://<your-laptop-ip>:8443` from a phone (accept the self-signed cert warning).
+On Windows, `.\scripts\start-all.ps1` does all three.
 
-### Offline locate simulator
+### Checks
 
-Preview item resolution, physical outputs, and the exact MQTT command without an
-ESP32, broker, or backend:
-
-```powershell
-python -m simulator.locate "NEO Motor"
-python -m simulator.locate FINDIT-002 --no-buzzer --json
+```bash
+cd backend && pytest                           # 178 tests, needs PostgreSQL
+python simulator/test_routing_matrix.py        # 50-route matrix, no dependencies
+cd frontend && npm run build
 ```
 
-The simulator reads the real `config/items.json` catalog. Its GPIO and buzzer
-values mirror the reference firmware, so it reports a per-device single-color LED
-rather than pretending that the current build has addressable RGB pixels.
+Firmware, once per identity:
 
-### Flash the firmware
-
-1. Install the ESP32 board package in Arduino IDE.
-2. Install libraries **PubSubClient** and **ArduinoJson**.
-3. Open `esp32/findit_esp32.ino` and edit the config block at the top:
-   `WIFI_SSID` / `WIFI_PASSWORD`, `MQTT_HOST` (your laptop's LAN IP), and a unique
-   `DEVICE_ID` matching an entry in `config/items.json`.
-4. Select board + port, upload. The device connects to Wi-Fi → MQTT on boot.
-
-Default wiring (override the macros at the top of the `.ino`):
-
-| Component | GPIO | Notes |
-|---|---|---|
-| LED | 2 | active-high (onboard LED works) |
-| Buzzer | 5 | passive buzzer, driven with `tone()` at 2 kHz |
-| Button | 4 | to GND, `INPUT_PULLUP`, press = low (stops the ring) |
-
-### API
-
-**HTTPS REST** (frontend ↔ backend)
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET`  | `/api/items` | catalog (hot-reloaded) |
-| `POST` | `/api/search-events` | start / stop a locate |
-| `GET`  | `/api/devices` | all device states |
-| `GET`  | `/api/devices/{id}` | one device |
-| `GET`  | `/api/events?limit=N` | recent event feed |
-
-`POST /api/search-events`:
-
-```json
-{ "user_id": "u1", "user_name": "Alice", "item_id": "FINDIT-001", "action": "start", "buzzer": true, "duration": 15 }
+```bash
+cd firmware
+arduino-cli compile --fqbn esp32:esp32:esp32c3 \
+  --build-property "compiler.cpp.extra_flags=-DFINDIT_CONTROLLER_INDEX=1" \
+  FindIt_Controller_Node
 ```
 
-`buzzer:false` → light only. Omit `duration` to use the item's default. A busy device
-returns `409 device_busy`.
+> **The build flag is not optional.** Omitting it silently builds CTRL-01,
+> because the index defaults to 1. After flashing, read the serial banner and
+> confirm the printed topic names the controller you meant.
 
-**MQTT** (backend ↔ ESP32)
+### What has actually been verified
 
-| Topic | Direction |
+| Claim | Evidence |
 |---|---|
-| `findit/device/{id}/command` | backend → device |
-| `findit/device/{id}/status` | device → backend |
+| 50 drawers route correctly | 50-route matrix, 223 checks, 0 cross-controller activations |
+| Search is deterministic | four typed outcomes — found / ambiguous / not_found / unlocated; it never guesses |
+| Topology cannot drift | enforced by PostgreSQL `CHECK`/`UNIQUE` constraints and by config validators, not by convention |
+| Idempotency | replaying a `command_id` publishes nothing and creates no second row |
+| One source, five identities | all five images compile; each contains only its own four MQTT topics and no other controller's |
+| No credentials in the repo | `Secrets.h` is git-ignored; every built image contains `REPLACE_LOCALLY` |
+| End-to-end loop | search → locate → simulated controller → ACK, for all 50 drawers |
 
-```json
-// command
-{"cmd":"start","item_id":"FINDIT-001","event_id":"...","duration":15,"buzzer":true}
-// status
-{"state":"ringing","device_id":"esp32-001","buzzer_on":true}
-{"state":"idle","stop_reason":"button"}   // button | timeout | backend
+### What has *not* been verified
+
+- **No physical ESP32-C3 has been brought up.** No Wi-Fi association, no broker
+  connection from a device, no LED has been lit by real hardware.
+- **Locate latency is unmeasured.** It is not stated anywhere as a number.
+- The simulator acknowledges synchronously; a real broker will not. The UI must
+  not assume an instant `acked`.
+
+### Provisioning
+
+Copy the template and fill it in locally — it is git-ignored and must never be
+committed:
+
+```bash
+cp firmware/FindIt_Controller_Node/Secrets.h.example \
+   firmware/FindIt_Controller_Node/Secrets.h
 ```
 
-### Project layout
-
-```
-backend/app/main.py         FastAPI app & REST endpoints
-backend/app/mqtt_bridge.py  MQTT client, device state, event log
-frontend/index.html         web client (with buzzer toggle)
-config/items.json           part catalog (hot-reloaded)
-simulator/locate.py         offline catalog + MQTT command preview
-mosquitto/mosquitto.conf    broker config
-esp32/findit_esp32.ino      device firmware
-scripts/*.ps1               cert / password / launch helpers
-```
-
-### Security
-
-`mosquitto/passwords` and the TLS keys under `certs/` are gitignored and never
-committed. The `findit123` in the code is a **placeholder default** — change it
-before any real deployment and update both the ESP32 sketch and the backend's
-`MQTT_PASS`. The demo uses a self-signed certificate; for a public domain, terminate
-HTTPS with Let's Encrypt or a Cloudflare Tunnel.
+Per-node provisioning records live in `firmware/controller_configs/CTRL-0x.json`
+(identity, drawer range, resolved topics, build flag, pin baseline — no
+credentials). Full procedure: [docs/CONTROLLER_PROVISIONING.md](docs/CONTROLLER_PROVISIONING.md).
 
 ### License
 
-[MIT](./LICENSE) © 2026 Harry Xin ([@HarryXin0919](https://github.com/HarryXin0919))
+MIT — see [LICENSE](./LICENSE).
 
 ---
 
 ## 中文
 
-> **状态——参考原型。** 本仓库包含 FastAPI/MQTT 控制面、ESP32-C3 固件、网页
-> 客户端与自动化测试。当前硬件目标是单色 GPIO LED、蜂鸣器和停止按钮。
-> [公开体验页](https://harryxin0919.github.io/trae-contest-2026/finditem/)
-> 是静态模拟，不连接真实后端、MQTT broker 或实体设备。自动化测试和固件编译
-> 不等于真机端到端验证；本次参赛版本尚未完成该验证。
+> **状态 —— 软件已验证，硬件尚未联调。**
+> 后端、前端、MQTT 契约和五节点模拟器已完整实现并端到端测试（178 个后端测试、
+> 50 条路由矩阵、固件五个身份全部编译通过）。**尚未点亮任何一块真实控制器。**
+> 本仓库中的任何内容都不应被理解为「硬件已验证」。
 
-### 是什么
+### 它做什么
 
-FindItem 的设计目标是把存储箱变成可搜索、可寻址的系统。你在手机或网页上搜索
-零件，参考控制链路会向目标 ESP32-C3 下发指令，由它驱动**单色 LED + 蜂鸣器**。
-设备分布式部署，通过集中式 FastAPI/MQTT 控制面驱动。
+50 个抽屉、5 个控制器、一个搜索框。你在网页里搜零件名，后端把它解析成抽屉号，
+再路由到拥有这个抽屉的控制器，通过 MQTT 下发定位命令 —— 只有一颗 WS2812 会亮，
+就在你要找的那个抽屉前面。
 
-适合创客空间、实验室、机器人队 —— 任何"这玩意儿在哪个箱"是日常问题的场景。
+面向创客空间、实验室和机器人战队：「这东西在哪个抽屉？」是每天都要问的问题。
 
-### 工作原理
+### 架构
 
 ```
-手机 / 网页  ──HTTPS──▶  FastAPI  ──MQTT──▶  Mosquitto  ──MQTT──▶  ESP32(LED + 蜂鸣器)
+(ESP32-C3 + MCP23017 + 10 × WS2812) × 5  =  50 个可寻址抽屉
 ```
 
-前端只通过 HTTPS 与后端通信;后端是唯一向设备发布 MQTT 命令的地方 —— 客户端**永远
-不直连 broker**。
+选五个相同节点，而不是一个大控制器或五十个小节点：布线保持在可管理的分组内，
+只需要给五个 Wi-Fi 客户端做配置，而且单节点故障只影响十个抽屉而非整个柜子。
+理由写在 [ADR-001](docs/adr/ADR-001-five-controllers.md)。
 
-### 功能
+抽屉到控制器的映射是**唯一一条公式**，seed、路由服务、模拟器和固件共用：
 
-- 🔦 **声光定位** —— LED 点亮目标箱,蜂鸣器确认
-- 🔕 **逐次蜂鸣器开关** —— 安静场合可只亮灯,开关贯通全链路
-- 🔁 **实时状态与事件流** —— 轮询设备状态 + 近期活动时间线
-- 🧩 **热加载物品库** —— 改 `config/items.json` 不用重启后端
-- 🔒 **MQTT 鉴权 + HTTPS** —— broker 要求账密,局域网用自签证书
+```python
+controller = (drawer - 1) // 10 + 1     # 1..5
+led_index  = (drawer - 1) %  10         # 0..9
+```
 
-> **当前参考版本尚未实现**：WS2812/RGB、多用户多颜色并发、LWT/心跳离线
-> 判定、SQLite 持久历史、飞书登录、电量监控和管理员 CRUD。
+系统里刻意没有广播通路。控制器 ID 在唯一的校验入口被检查，拒绝通配符、`all`
+和未知 ID，所以「点亮所有抽屉」这个操作根本无法表达。
 
-### 技术栈
+### 目录结构
 
-| 层 | 技术 |
-|---|---|
-| 固件 | ESP32 · Arduino(C++)· PubSubClient · ArduinoJson |
-| 后端 | Python · FastAPI · paho-mqtt |
-| Broker | Mosquitto(MQTT) |
-| 前端 | 原生 HTML / CSS / JS |
+`backend/`（FastAPI + PostgreSQL，178 个测试）、`firmware/`（**一套**源码五个身份）、
+`frontend/`（React + Vite）、`simulator/`（与固件共用同一份契约模块）、
+`hardware-tests/`（逐级 bring-up 草图）、`docs/`（固件架构、配置、接线、调试、ADR、图纸）。
 
-> Python FastAPI 后端是主要参考实现。Java/Spring Boot 后端在仓库中存在,
-> 但不保证实现了完整契约 —— 使用前请验证功能一致性。
+`legacy-v1/` 是上一代单设备原型（LED + 蜂鸣器），含两个 Java 后端 —— 已冻结但 CI
+仍在编，避免烂掉。它整个目录一起保留是因为内部路径都相对于**它自己的**根：Java 后端
+用 `../config/items.json` 和 `../frontend/index.html` 定位，若把它留在仓库根目录，
+`../frontend/index.html` 会静默指到 v2 的 React 外壳。详见
+[legacy-v1/README.md](legacy-v1/README.md)。
 
-### 快速开始(Windows + PowerShell)
+### 快速开始
 
-> 需要 Python、Mosquitto、Git for Windows(自带 `openssl`)。
+下面全部**不需要接硬件** —— `device_mode` 默认是 `simulator`，五个控制器跑在
+后端进程内。
 
-```powershell
+```bash
+# 1. PostgreSQL
+docker compose -f docker-compose.postgres.yml up -d
+
+# 2. 后端（首次）
+cd backend
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m app.seed          # 5 控制器 + 50 抽屉 + 12 个物品
 
-.\scripts\init-mqtt-passwd.ps1   # 生成 MQTT 密码文件
-.\scripts\gen-certs.ps1          # 生成自签 HTTPS 证书
-.\scripts\start-all.ps1          # 启动 Mosquitto + 后端
+# 每次
+.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+
+# 3. 前端
+cd frontend
+npm install
+npm run dev                                    # http://localhost:5173
 ```
 
-后端监听 `https://0.0.0.0:8443`。同一局域网下,手机打开
-`https://<笔记本-IP>:8443`(自签证书首次会弹安全警告,选"继续访问")。
-
-### 离线定位模拟器
-
-不用连接 ESP32、MQTT broker 或后端，也能验证物品查询、实体输出和实际 MQTT
-命令：
-
-```powershell
-python -m simulator.locate "NEO 电机"
-python -m simulator.locate FINDIT-002 --no-buzzer --json
-```
-
-模拟器直接读取真实的 `config/items.json`。GPIO 与蜂鸣器参数和参考固件一致；
-当前硬件是每台设备一个单色 LED，因此不会虚构尚未实现的可寻址 RGB 灯珠接口。
+Windows 上 `.\scripts\start-all.ps1` 一把起全部。
 
 ### 烧录固件
 
-1. Arduino IDE 装好 ESP32 板包。
-2. 安装库 **PubSubClient** 和 **ArduinoJson**。
-3. 打开 `esp32/findit_esp32.ino`,改顶部配置块:`WIFI_SSID` / `WIFI_PASSWORD`、
-   `MQTT_HOST`(笔记本局域网 IP)、唯一的 `DEVICE_ID`(与 `config/items.json` 对齐)。
-4. 选板子 + 端口,上传。上电后自动连 Wi-Fi → MQTT。
+```bash
+cd firmware
+arduino-cli compile --fqbn esp32:esp32:esp32c3 \
+  --build-property "compiler.cpp.extra_flags=-DFINDIT_CONTROLLER_INDEX=1" \
+  FindIt_Controller_Node
+```
 
-默认接线(改顶部宏即可):
+> **这个编译标志不能省。** 漏传会静默编成 CTRL-01（index 默认为 1），编译期守卫
+> 只拦 1–5 之外的值，拦不住「漏传」。烧完请看串口 banner，确认打印出来的 topic
+> 是你想要的那个控制器。
 
-| 元件 | GPIO | 说明 |
-|---|---|---|
-| LED | 2 | 高电平亮(板载 LED 也行) |
-| 蜂鸣器 | 5 | 无源蜂鸣器,`tone()` 输出 2 kHz |
-| 按钮 | 4 | 接 GND,`INPUT_PULLUP`,按下 = 低(停止响铃) |
+凭据永远不进仓库：把 `Secrets.h.example` 复制成 `Secrets.h`（已 gitignore）在本地填写。
+每个节点的配置记录在 `firmware/controller_configs/CTRL-0x.json`（身份、抽屉范围、
+解析好的 topic、编译标志、引脚基线，**不含任何凭据**）。完整流程见
+[docs/CONTROLLER_PROVISIONING.md](docs/CONTROLLER_PROVISIONING.md)。
 
-### 安全说明
+### 尚未验证的部分
 
-`mosquitto/passwords` 和 `certs/` 下的密钥都已 gitignore,不会提交。代码里的
-`findit123` 只是**占位默认密码** —— 正式部署前请更换,并同步改 ESP32 固件与后端的
-`MQTT_PASS`。demo 用自签证书;要上正式域名,用 Let's Encrypt 或 Cloudflare Tunnel
-终止 HTTPS。
+- **没有点亮过任何真实的 ESP32-C3。** 没有 Wi-Fi 关联、没有设备侧 broker 连接、
+  没有真实硬件点亮过 LED。
+- **定位延迟未测量**，因此任何地方都没有写延迟数字。
+- 模拟器是同步 ACK 的，真实 broker 不会 —— UI 不能假设 `acked` 会瞬间返回。
 
 ### 许可
 
-[MIT](./LICENSE) © 2026 Harry Xin([@HarryXin0919](https://github.com/HarryXin0919))
+[MIT](./LICENSE) © 2026 Harry Xin（[@HarryXin0919](https://github.com/HarryXin0919)）

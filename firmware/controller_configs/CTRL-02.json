@@ -1,0 +1,21 @@
+{
+  "controller_id": "CTRL-02",
+  "controller_index": 2,
+  "global_drawer_start": 11,
+  "global_drawer_end": 20,
+  "led_count": 10,
+  "mqtt_base_topic": "findit/controllers/CTRL-02",
+  "mqtt_topics": {
+    "command": "findit/controllers/CTRL-02/command",
+    "ack": "findit/controllers/CTRL-02/ack",
+    "status": "findit/controllers/CTRL-02/status",
+    "heartbeat": "findit/controllers/CTRL-02/heartbeat"
+  },
+  "fw_version": "fw-0.11.0",
+  "config_version": "cfg-1",
+  "build_flag": "-DFINDIT_CONTROLLER_INDEX=2",
+  "mcp23017_address": "0x20",
+  "i2c_sda_gpio": 4,
+  "i2c_scl_gpio": 5,
+  "ws2812_data_gpio": 3
+}
