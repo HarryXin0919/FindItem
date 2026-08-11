@@ -2,57 +2,87 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2-bigbang]
   pull_request:
     branches: [main]
 
 jobs:
-  python:
-    name: Python backend (pytest)
+  backend:
+    name: Backend (pytest against real PostgreSQL)
     runs-on: ubuntu-latest
+    # The data model is enforced by PostgreSQL CHECK/UNIQUE constraints, so the
+    # tests run against a real server. SQLite is not a permitted stand-in.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: findit
+          POSTGRES_PASSWORD: findit_dev
+          POSTGRES_DB: findit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U findit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://findit:findit_dev@localhost:5432/findit
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install deps
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        working-directory: backend
+        run: pip install -r requirements.txt
       - name: Compile check
-        run: python -m compileall backend
+        working-directory: backend
+        run: python -m compileall app
+      - name: Seed
+        working-directory: backend
+        run: python -m app.seed
       - name: Run tests
+        working-directory: backend
         run: pytest
 
-  java17:
-    name: Java backend · Spring Boot 3 / JDK 17
+  simulator:
+    name: Simulator (50-route matrix, no dependencies)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-python@v5
         with:
-          distribution: temurin
-          java-version: "17"
-          cache: maven
-      - name: Build + test
-        working-directory: backend-java
-        run: mvn -B -ntp verify
+          python-version: "3.12"
+      - name: Routing matrix
+        run: python simulator/test_routing_matrix.py
 
-  java8:
-    name: Java backend · Spring Boot 2.7 / JDK 8
+  frontend:
+    name: Frontend (vite build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: "8"
-          cache: maven
-      - name: Build + test
-        working-directory: backend-java8
-        run: mvn -B -ntp verify
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+      - name: Build
+        working-directory: frontend
+        run: npm run build
 
   firmware:
-    name: ESP32-C3 firmware (arduino-cli compile)
+    name: Firmware ${{ matrix.controller }}
     runs-on: ubuntu-latest
+    # One source, five identities. Every identity is compiled, because "it
+    # builds for CTRL-01" is not evidence that the other four link.
+    strategy:
+      fail-fast: false
+      matrix:
+        controller: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v2
@@ -64,10 +94,34 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
           arduino-cli lib install PubSubClient ArduinoJson
-      - name: Compile sketch
+      - name: Compile as CTRL-0${{ matrix.controller }}
+        working-directory: firmware
         run: |
-          # arduino-cli needs the .ino inside a folder of the SAME name, so copy
-          # findit_esp32.ino (it lives in esp32/) into a matching sketch folder.
-          mkdir -p build_sketch/findit_esp32
-          cp esp32/findit_esp32.ino build_sketch/findit_esp32/
-          arduino-cli compile --fqbn esp32:esp32:esp32c3 build_sketch/findit_esp32
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 \
+            --build-property "compiler.cpp.extra_flags=-DFINDIT_CONTROLLER_INDEX=${{ matrix.controller }}" \
+            --output-dir "out" \
+            FindIt_Controller_Node
+      - name: Assert the image carries only its own topics
+        working-directory: firmware
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          index = int(os.environ["INDEX"])
+          cid = f"CTRL-0{index}"
+          blob = open("out/FindIt_Controller_Node.ino.bin", "rb").read()
+          found = {m.decode() for m in re.findall(
+              rb"findit/controllers/CTRL-0[1-5]/(?:command|ack|status|heartbeat)", blob)}
+          expected = {f"findit/controllers/{cid}/{leaf}"
+                      for leaf in ("command", "ack", "status", "heartbeat")}
+          missing = expected - found
+          foreign = {t for t in found if f"/{cid}/" not in t}
+          if missing:
+              sys.exit(f"FAIL {cid}: missing topics {sorted(missing)}")
+          if foreign:
+              sys.exit(f"FAIL {cid}: image contains other controllers' topics {sorted(foreign)}")
+          if b"REPLACE_LOCALLY" not in blob:
+              sys.exit(f"FAIL {cid}: image was not built from placeholder secrets")
+          print(f"PASS {cid}: exactly its own four topics, no real credential compiled in")
+          PY
+        env:
+          INDEX: ${{ matrix.controller }}

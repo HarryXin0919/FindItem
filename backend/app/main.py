@@ -1,186 +1,85 @@
-"""FastAPI 入口。
-
-启动命令:
-  python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8443 \
-      --ssl-keyfile certs/server.key --ssl-certfile certs/server.crt
-
-环境变量(可选):
-  MQTT_HOST  默认 127.0.0.1
-  MQTT_PORT  默认 1883
-  MQTT_USER  默认 findit_backend
-  MQTT_PASS  默认 findit123
-"""
-from __future__ import annotations
-
-import json
-import logging
-import os
 from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from .mqtt_bridge import FindItBridge
+from app.config import NODE_DESCRIPTION, Settings, get_settings
+from app.logging_config import configure_logging
+from app.routes_controllers import router as controllers_router
+from app.routes_search import router as search_router
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("finditem")
+settings: Settings = get_settings()
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-CONFIG_PATH = BASE_DIR / "config" / "items.json"
-FRONTEND_DIR = BASE_DIR / "frontend"
+configure_logging()
 
-MQTT_HOST = os.environ.get("MQTT_HOST", "127.0.0.1")
-MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
-MQTT_USER = os.environ.get("MQTT_USER", "findit_backend")
-MQTT_PASS = os.environ.get("MQTT_PASS", "findit123")
+def announce_simulated_devices() -> None:
+    """In simulator mode the five nodes exist from the moment the process
+    starts, so apply their status once instead of leaving the dashboard
+    reporting `unknown` for devices that are demonstrably running."""
+    from app.database import SessionLocal
+    from app.routes_controllers import get_device_bus
+    from app.services.command_service import CommandService
+    from app.services.mqtt_client import FakePublisher
 
-bridge = FindItBridge(MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS)
+    bus = get_device_bus()
+    if bus is None:
+        return
+    with SessionLocal() as session:
+        service = CommandService(session, FakePublisher())
+        for payload in bus.status_payloads():
+            try:
+                service.handle_status(payload)
+            except Exception:  # a missing seed is not a reason to fail startup
+                session.rollback()
+                return
+        session.commit()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    try:
-        bridge.start()
-    except Exception as e:
-        log.warning("MQTT 启动异常(后台会重试,API 仍可用): %s", e)
-    try:
-        yield
-    finally:
-        bridge.stop()
+async def lifespan(_app: FastAPI):
+    announce_simulated_devices()
+    yield
 
 
-app = FastAPI(title="FindIt MVP", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+
+# The Vite dev server runs on a different origin during development. Locked to
+# localhost only - this is not an authentication mechanism and S07 must not add
+# one.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):\d+$",
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+app.include_router(search_router)
+app.include_router(controllers_router)
 
 
-def _load_items() -> dict:
-    """每次都重读 -> 改 items.json 不重启 FastAPI。
-    文件缺失/正在保存/语法错误时,不要用 500 把整个物品列表打挂 —— 抛 503,前端可重试。"""
-    try:
-        with CONFIG_PATH.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        raise HTTPException(status_code=503, detail={"error": "catalog_unavailable", "reason": "items.json 不存在"})
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=503, detail={"error": "catalog_invalid", "reason": f"items.json 解析失败: {e}"})
-    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
-        raise HTTPException(status_code=503, detail={"error": "catalog_invalid", "reason": "缺少 items 列表"})
-    return data
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe. Must stay dependency-free so it answers even if
+    PostgreSQL or MQTT are down - readiness is a separate, later concern."""
+    return {"status": "ok"}
 
 
-# ============ Pydantic 模型 ============
-
-class SearchEvent(BaseModel):
-    user_id: str = Field(..., min_length=1)
-    user_name: str = Field(..., min_length=1)
-    item_id: str = Field(..., min_length=1)
-    action: Literal["start", "stop"]
-    buzzer: bool = True
-    duration: int | None = Field(default=None, ge=1, le=120)
-
-
-# ============ REST 端点 ============
-
-@app.get("/api/items")
-def get_items():
-    return _load_items()
-
-
-@app.post("/api/search-events")
-def post_event(body: SearchEvent):
-    items = _load_items()["items"]
-    item = next((x for x in items if x.get("id") == body.item_id), None)
-    if item is None:
-        raise HTTPException(status_code=404, detail={"error": "unknown_item", "item_id": body.item_id})
-    device_id = item.get("device_id")
-    if not device_id:
-        raise HTTPException(status_code=500, detail={"error": "item_missing_device_id", "item_id": body.item_id})
-
-    if body.action == "start":
-        duration = body.duration or item.get("duration_sec", 15)
-        event_id = bridge.try_start(
-            device_id=device_id,
-            item_id=body.item_id,
-            user_id=body.user_id,
-            user_name=body.user_name,
-            duration=duration,
-            buzzer=body.buzzer,
-        )
-        if event_id is None:
-            if bridge.is_busy(device_id):
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "error": "device_busy",
-                        "device_id": device_id,
-                        "state": bridge.device_state(device_id),
-                    },
-                )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "error": "command_unavailable",
-                    "device_id": device_id,
-                    "reason": "命令发送失败(broker 未连接或 publish 异常)",
-                },
-            )
-        return {
-            "ok": True,
-            "event_id": event_id,
-            "device_id": device_id,
-            "duration": duration,
-            "buzzer": body.buzzer,
-            "status": "submitted",
-            "message": "指令已提交,等待设备确认",
-        }
-
-    # action == "stop"
-    ok = bridge.send_stop(device_id, body.item_id)
-    if not ok:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "command_unavailable",
-                "device_id": device_id,
-                "reason": "停止命令发送失败(broker 未连接或 publish 异常)",
-            },
-        )
+@app.get("/api/architecture")
+def architecture() -> dict:
+    """The locked topology, served from configuration rather than literals."""
     return {
-        "ok": True,
-        "device_id": device_id,
-        "status": "stop_submitted",
-        "message": "停止指令已提交,等待设备确认",
+        "controllers": settings.controller_count,
+        "leds_per_controller": settings.leds_per_controller,
+        "total_drawers": settings.total_drawers,
+        "node": NODE_DESCRIPTION,
+        "topology": settings.architecture,
     }
 
 
-@app.get("/api/devices")
-def all_devices():
-    """前端轮询用 —— 状态轮询。"""
-    return {"devices": bridge.all_device_states()}
+@app.get("/api/config")
+def config() -> dict:
+    """Non-secret runtime configuration, for operators and the S10 gate.
 
-
-@app.get("/api/devices/{device_id}")
-def device_state(device_id: str):
-    return bridge.device_state(device_id)
-
-
-@app.get("/api/events")
-def get_events(limit: int = Query(50, ge=1, le=200)):
-    """多用户事件时间线 —— 按 user_id 上色。"""
-    return {"events": bridge.recent_events(limit=limit)}
-
-
-# ============ 前端托管 ============
-
-@app.get("/")
-def index():
-    return FileResponse(FRONTEND_DIR / "index.html")
-
-
-if FRONTEND_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-else:
-    log.warning("前端目录不存在,跳过 /static 挂载: %s", FRONTEND_DIR)
+    Passwords are never included; see `Settings.safe_dict`.
+    """
+    return settings.safe_dict()
