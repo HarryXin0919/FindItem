@@ -1,0 +1,22 @@
+server:
+  port: 8443
+  # To match the Python backend's HTTPS, enable SSL with the PEM cert produced by
+  # scripts/gen-certs.ps1 (Spring Boot 3.1+ reads PEM directly):
+  # ssl:
+  #   enabled: true
+  #   certificate: ../certs/server.crt
+  #   certificate-private-key: ../certs/server.key
+
+finditem:
+  catalog: ${FINDITEM_CATALOG:../config/items.json}
+  frontend: ${FINDITEM_FRONTEND:../frontend/index.html}
+
+mqtt:
+  host: ${MQTT_HOST:127.0.0.1}
+  port: ${MQTT_PORT:1883}
+  user: ${MQTT_USER:findit_backend}
+  pass: ${MQTT_PASS:findit123}
+
+spring:
+  main:
+    banner-mode: "off"

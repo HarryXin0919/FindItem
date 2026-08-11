@@ -125,3 +125,77 @@ jobs:
           PY
         env:
           INDEX: ${{ matrix.controller }}
+
+  # ---------------------------------------------------------------------------
+  # legacy-v1 — the single-device prototype. Frozen, but kept building so it
+  # does not rot. Every path inside it is relative to legacy-v1/, which is why
+  # the jobs below set working-directory rather than running from the root.
+  # ---------------------------------------------------------------------------
+
+  legacy-python:
+    name: legacy-v1 · Python backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        working-directory: legacy-v1
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Compile check
+        working-directory: legacy-v1
+        run: python -m compileall backend
+      - name: Run tests
+        working-directory: legacy-v1
+        run: pytest
+
+  legacy-java17:
+    name: legacy-v1 · Java · Spring Boot 3 / JDK 17
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Build + test
+        working-directory: legacy-v1/backend-java
+        run: mvn -B -ntp verify
+
+  legacy-java8:
+    name: legacy-v1 · Java · Spring Boot 2.7 / JDK 8
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Build + test
+        working-directory: legacy-v1/backend-java8
+        run: mvn -B -ntp verify
+
+  legacy-firmware:
+    name: legacy-v1 · ESP32 firmware (arduino-cli compile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 core + libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install PubSubClient ArduinoJson
+      - name: Compile sketch
+        working-directory: legacy-v1
+        run: |
+          # arduino-cli needs the .ino inside a folder of the SAME name.
+          mkdir -p build_sketch/findit_esp32
+          cp esp32/findit_esp32.ino build_sketch/findit_esp32/
+          arduino-cli compile --fqbn esp32:esp32:esp32c3 build_sketch/findit_esp32

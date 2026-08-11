@@ -95,6 +95,7 @@ drawer" is not expressible.
 | `simulator/` | Five-node / fifty-LED simulator speaking the same MQTT contract as the firmware |
 | `hardware-tests/` | Incremental bring-up sketches, serial baseline → complete node → five-node |
 | `docs/` | Firmware architecture, provisioning, wiring, debugging, deployment, ADR, diagrams |
+| `legacy-v1/` | The previous single-device prototype (LED + buzzer), including both Java backends. Frozen but still built by CI — see [legacy-v1/README.md](legacy-v1/README.md) |
 
 ### Quick start
 
@@ -217,6 +218,18 @@ led_index  = (drawer - 1) %  10         # 0..9
 
 系统里刻意没有广播通路。控制器 ID 在唯一的校验入口被检查，拒绝通配符、`all`
 和未知 ID，所以「点亮所有抽屉」这个操作根本无法表达。
+
+### 目录结构
+
+`backend/`（FastAPI + PostgreSQL，178 个测试）、`firmware/`（**一套**源码五个身份）、
+`frontend/`（React + Vite）、`simulator/`（与固件共用同一份契约模块）、
+`hardware-tests/`（逐级 bring-up 草图）、`docs/`（固件架构、配置、接线、调试、ADR、图纸）。
+
+`legacy-v1/` 是上一代单设备原型（LED + 蜂鸣器），含两个 Java 后端 —— 已冻结但 CI
+仍在编，避免烂掉。它整个目录一起保留是因为内部路径都相对于**它自己的**根：Java 后端
+用 `../config/items.json` 和 `../frontend/index.html` 定位，若把它留在仓库根目录，
+`../frontend/index.html` 会静默指到 v2 的 React 外壳。详见
+[legacy-v1/README.md](legacy-v1/README.md)。
 
 ### 快速开始
 
